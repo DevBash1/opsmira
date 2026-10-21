@@ -1,0 +1,944 @@
+@import "tailwindcss";
+
+:root {
+  /* Opsmira design tokens (light) — from opsmira.pen */
+  --canvas: #f8f9f7;
+  --ink: #202b26;
+  --muted: #66746c;
+  --line: #dde4de;
+  --surface: #ffffff;
+  --accent: #337b58;
+  --soft: #ebf2ec;
+  --accent-2: #2e8c8a;
+  --accent-strong: #1f5e40;
+  --glow: #3fa06e33;
+  --glow-2: #2e8c8a26;
+  --glass: #ffffffcc;
+  --raised: #ffffff;
+  --shadow: #1f3a2a1f;
+  --hairline: #20302814;
+  --danger: #c2412d;
+  /* How strongly the console aurora shows through (dimmer on dark canvases). */
+  --aurora-strength: 1;
+  /* Native controls (the model <select>, scrollbars) follow the theme. */
+  color-scheme: light;
+}
+
+.theme-dark {
+  /* Opsmira design tokens (dark) */
+  --canvas: #111614;
+  --ink: #e9eee9;
+  --muted: #96a59b;
+  --line: #2c3730;
+  --surface: #1a211d;
+  --accent: #91cdaa;
+  --soft: #23372b;
+  --accent-2: #7fd6cf;
+  --accent-strong: #b5efcb;
+  --glow: #5fd39444;
+  --glow-2: #4fc1c033;
+  --glass: #1a211db3;
+  --raised: #1f2823;
+  --shadow: #00000080;
+  --hairline: #ffffff14;
+  --danger: #f08a80;
+  --aurora-strength: 0.6;
+  color-scheme: dark;
+}
+
+@theme {
+  /* named entrance animations (used via animate-fade-in / animate-rise-in) */
+  --animate-fade-in: fade-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-rise-in: rise-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-line-up: line-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* backwards fill: nothing (no filter, no transform) is left on the element once it settles */
+  --animate-blur-rise: blur-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  --animate-mask-up: mask-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  --animate-soft-rise: scene-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  --animate-roll-in: roll-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+
+  /* shared motion curves: one feel for every enter/move on the site */
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-move: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Entrance animations. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Headline line reveal: each line rises out of its own clipping mask. */
+@keyframes line-up {
+  from {
+    transform: translateY(150%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Looping "live" indicators (referenced through arbitrary values). */
+@keyframes marquee-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes marquee-right {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.1;
+  }
+}
+
+@keyframes dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Latency bars grow in when the product window scrolls into view. */
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.bar-grow {
+  animation: bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: bottom;
+}
+
+.bar-grow:nth-child(2) {
+  animation-delay: 25ms;
+}
+.bar-grow:nth-child(3) {
+  animation-delay: 50ms;
+}
+.bar-grow:nth-child(4) {
+  animation-delay: 75ms;
+}
+.bar-grow:nth-child(5) {
+  animation-delay: 100ms;
+}
+.bar-grow:nth-child(6) {
+  animation-delay: 125ms;
+}
+.bar-grow:nth-child(7) {
+  animation-delay: 150ms;
+}
+.bar-grow:nth-child(8) {
+  animation-delay: 175ms;
+}
+.bar-grow:nth-child(9) {
+  animation-delay: 200ms;
+}
+.bar-grow:nth-child(10) {
+  animation-delay: 225ms;
+}
+.bar-grow:nth-child(11) {
+  animation-delay: 250ms;
+}
+.bar-grow:nth-child(12) {
+  animation-delay: 275ms;
+}
+
+/* Ambient motion for backdrop rings, glows and floating elements. */
+@keyframes ring-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+@keyframes glow-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate3d(-38px, 26px, 0) scale(1.07);
+    opacity: 1;
+  }
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-9px);
+  }
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Floating status dots (pulse + drift combined). */
+.dot-float-1 {
+  animation:
+    dot-pulse 3s ease-in-out infinite,
+    float-y 6.5s ease-in-out infinite;
+}
+
+.dot-float-2 {
+  animation:
+    dot-pulse 3.4s ease-in-out infinite,
+    float-y 7.5s ease-in-out infinite;
+  animation-delay: -1.2s, -2.8s;
+}
+
+/* Skeleton placeholder sweep. */
+@keyframes shimmer {
+  0% {
+    background-position: 110% 0;
+  }
+  100% {
+    background-position: -110% 0;
+  }
+}
+
+.skeleton {
+  background-image: linear-gradient(90deg, var(--line) 0%, var(--soft) 50%, var(--line) 100%);
+  background-size: 220% 100%;
+  animation: shimmer 2.6s ease-in-out infinite;
+}
+
+.skeleton-2 {
+  animation-delay: -1.3s;
+}
+
+/* ---------- Console motion ---------- */
+
+/* Rise out of a soft blur. Only a `from` frame, so the element ends on its own styles. */
+@keyframes blur-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(8px);
+  }
+}
+
+/* Lighter variant for large blocks (scene panels, tables): less blur to rasterize. */
+@keyframes scene-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(4px);
+  }
+}
+
+/* A line rising out of its clipping mask. */
+@keyframes mask-up {
+  from {
+    transform: translateY(110%);
+  }
+}
+
+@keyframes row-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A digit rolling up into place. */
+@keyframes roll-in {
+  from {
+    opacity: 0;
+    transform: translateY(70%);
+  }
+}
+
+/* Gradient sweeping through text (thinking label). */
+@keyframes text-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+.text-shimmer {
+  background-image: linear-gradient(90deg, var(--ink) 0%, var(--ink) 38%, var(--accent-2) 50%, var(--ink) 62%, var(--ink) 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: text-shimmer 2.2s linear infinite;
+}
+
+/* A soft highlight passing across a pending surface. */
+@keyframes sheen {
+  from {
+    transform: translateX(-120%) skewX(-14deg);
+  }
+  to {
+    transform: translateX(320%) skewX(-14deg);
+  }
+}
+
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 36%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent-2) 16%, transparent), transparent);
+  animation: sheen 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* Brighter sheen for use on accent fills (running progress bars). */
+.sheen-light::after {
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--canvas) 55%, transparent), transparent);
+}
+
+/* Horizontal fill that keeps rounded ends (scaleX would squash them). */
+@keyframes bar-fill {
+  from {
+    clip-path: inset(0 100% 0 0 round 999px);
+  }
+}
+
+.bar-fill {
+  animation: bar-fill 1s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+/* SVG ring stroke drawing in; the element sets --ring-c to its circumference. */
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: var(--ring-c);
+  }
+}
+
+/* Vertical rails drawing downward. */
+@keyframes rail-draw {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+/* One-shot ring expanding from a pressed control. */
+@keyframes ripple {
+  from {
+    transform: scale(0.6);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* A ring of light leaving a control the moment it's pressed (approve, actions). */
+@keyframes pulse-ring {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 45%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 16px transparent;
+  }
+}
+
+/* A single eager bump, e.g. a button unlocking. */
+@keyframes pop {
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+/* An icon turning into place when it changes (theme sun ↔ moon). */
+@keyframes icon-swap {
+  from {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.4);
+  }
+}
+
+/* Small nodes popping into place. */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+/* A small orb that never quite holds its shape. */
+@keyframes orb-morph {
+  0%,
+  100% {
+    border-radius: 42% 58% 62% 38% / 45% 42% 58% 55%;
+  }
+  33% {
+    border-radius: 58% 42% 38% 62% / 55% 60% 40% 45%;
+  }
+  66% {
+    border-radius: 38% 62% 55% 45% / 40% 52% 48% 60%;
+  }
+}
+
+/* Gentle vertical bob (jump-to-latest arrow). */
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+/* Scene blocks arrive one after another; every scene root's direct children are staggered. */
+@media (prefers-reduced-motion: no-preference) {
+  .scene-stagger > * > * {
+    animation: scene-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .scene-stagger > * > :nth-child(2) {
+    animation-delay: 55ms;
+  }
+  .scene-stagger > * > :nth-child(3) {
+    animation-delay: 110ms;
+  }
+  .scene-stagger > * > :nth-child(4) {
+    animation-delay: 165ms;
+  }
+  .scene-stagger > * > :nth-child(5) {
+    animation-delay: 220ms;
+  }
+  .scene-stagger > * > :nth-child(6) {
+    animation-delay: 275ms;
+  }
+  .scene-stagger > * > :nth-child(7) {
+    animation-delay: 330ms;
+  }
+  .scene-stagger > * > :nth-child(8) {
+    animation-delay: 385ms;
+  }
+  .scene-stagger > * > :nth-child(n + 9) {
+    animation-delay: 440ms;
+  }
+}
+
+/* Chat stage: content dissolves into the edges instead of being cut off. */
+.stage-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%);
+}
+
+/* Composer border while a request is in flight: a comet of light gliding around the edge (see
+   EdgeLight). The comet is a row of soft dots, each carried along the rounded outline with
+   offset-path, so it keeps one speed and one length on every side and bends round the corners
+   (a rotating conic gradient stretches on wide boxes; a straight streak sticks out at corners).
+   .liquid-edge masks the dots down to a 1.5px ring; .liquid-edge-glow is the same comet, blurred,
+   blooming just outside it. --edge-1 / --edge-2 recolour it (e.g. warm in Full access mode),
+   --edge-r is the corner radius of the box it runs around. */
+.liquid-edge,
+.liquid-edge-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.liquid-edge {
+  opacity: 0.8;
+  padding: 1.5px;
+  overflow: hidden;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+
+.liquid-edge-glow {
+  opacity: 0.16;
+  filter: blur(5px);
+}
+
+.edge-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--edge-2, var(--accent));
+  offset-path: inset(0.75px round calc(var(--edge-r, 22px) - 0.75px));
+  offset-rotate: 0deg;
+  offset-anchor: 50% 50%;
+  /* --back is how far behind the head this dot trails */
+  animation: edge-run 5s linear infinite;
+}
+
+.edge-dot:first-child {
+  background: color-mix(in oklab, var(--edge-1, var(--accent-2)) 80%, white);
+}
+
+.liquid-edge-glow .edge-dot {
+  width: 12px;
+  height: 12px;
+}
+
+@keyframes edge-run {
+  from {
+    offset-distance: calc(0% - var(--back, 0px));
+  }
+  to {
+    offset-distance: calc(100% - var(--back, 0px));
+  }
+}
+
+/* A slow ring of light circling a card that is waiting on the owner. */
+.liquid-edge-slow .edge-dot {
+  animation-duration: 8s;
+}
+
+.liquid-edge-slow {
+  opacity: 0.6;
+}
+
+/* Reduced motion: no travelling light, just a steady lit rim. */
+@media (prefers-reduced-motion: reduce) {
+  .liquid-edge {
+    background: color-mix(in oklab, var(--edge-2, var(--accent)) 55%, transparent);
+  }
+  .edge-dot {
+    display: none;
+  }
+}
+
+/* Frosted glass for cards in the chat. Built from translucent fills, a rim light and a specular
+   glare rather than backdrop-filter: the chat stage is masked (edge fade), which cuts any backdrop
+   off from the aurora behind it, so a real blur would have nothing to blur. */
+.glass {
+  isolation: isolate;
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklab, var(--surface) 86%, transparent) 0%,
+    color-mix(in oklab, var(--surface) 58%, transparent) 55%,
+    color-mix(in oklab, var(--surface) 72%, transparent) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--surface) 95%, transparent),
+    inset 0 -1px 0 color-mix(in oklab, var(--accent) 10%, transparent),
+    0 1px 2px var(--shadow),
+    0 26px 60px -20px color-mix(in oklab, var(--accent) 38%, transparent);
+}
+
+/* Specular glare across the top-left corner, under the content. */
+.glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(130% 90% at 0% 0%, color-mix(in oklab, var(--surface) 80%, transparent), transparent 55%),
+    radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--accent-2) 10%, transparent), transparent 70%);
+}
+
+/* Inner wells on glass (command lines, inputs). */
+.glass-well {
+  background: color-mix(in oklab, var(--canvas) 62%, transparent);
+}
+
+/* Theme switch: the new theme spreads out of the toggle button as a growing circle.
+   --vt-x / --vt-y / --vt-r are set on <html> from the button's position just before the switch. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  animation: theme-reveal 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0 at var(--vt-x, 50%) var(--vt-y, 0%));
+  }
+  to {
+    clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 50%) var(--vt-y, 0%));
+  }
+}
+
+/* ---------- Console aurora: a slow liquid field behind everything ---------- */
+.aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.aurora-field {
+  position: absolute;
+  inset: 0;
+  opacity: var(--aurora-strength);
+  transition:
+    transform 2.4s var(--ease-move),
+    opacity 1.2s var(--ease-move);
+}
+
+/* Soft circles that are stretched and rotated as they drift, so they read as liquid shapes.
+   Only transform animates: no filters, no paint. */
+.aurora-blob {
+  position: absolute;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  will-change: transform;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+.aurora-b1 {
+  top: -34vmax;
+  right: -26vmax;
+  width: 74vmax;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--accent) 24%, transparent), transparent);
+  animation-name: aurora-a;
+  animation-duration: 30s;
+  animation-delay: -7s;
+}
+
+.aurora-b2 {
+  bottom: -32vmax;
+  left: -28vmax;
+  width: 66vmax;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-2) 20%, transparent), transparent);
+  animation-name: aurora-b;
+  animation-duration: 36s;
+  animation-delay: -21s;
+}
+
+.aurora-b3 {
+  top: 18%;
+  left: -20vmax;
+  width: 52vmax;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-strong) 10%, transparent), transparent);
+  animation-name: aurora-c;
+  animation-duration: 25s;
+  animation-delay: -12s;
+}
+
+.aurora-b4 {
+  right: 4vmax;
+  bottom: -20vmax;
+  width: 46vmax;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--accent-2) 13%, transparent), transparent);
+  animation-name: aurora-d;
+  animation-duration: 42s;
+  animation-delay: -33s;
+}
+
+/* Activity glow rising behind the composer while the agent thinks or works. */
+.aurora-energy {
+  position: absolute;
+  bottom: -30vmax;
+  left: 50%;
+  width: 60vmax;
+  aspect-ratio: 1.6;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--accent) 30%, transparent),
+    color-mix(in oklab, var(--accent-2) 14%, transparent) 55%,
+    transparent
+  );
+  opacity: 0;
+  transition: opacity 1.8s var(--ease-move);
+  animation: energy-breathe 7s ease-in-out infinite alternate;
+}
+
+.aurora-veil {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklab, var(--canvas) 55%, transparent);
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-move);
+}
+
+/* Fine static grain: a touch of texture, and it hides gradient banding. */
+.aurora-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 160px;
+}
+
+.aurora[data-mood="thinking"] .aurora-field {
+  transform: scale(1.04);
+}
+.aurora[data-mood="thinking"] .aurora-energy {
+  opacity: 0.55;
+  transition-duration: 0.9s;
+}
+.aurora[data-mood="working"] .aurora-field {
+  transform: scale(1.07);
+}
+.aurora[data-mood="working"] .aurora-energy {
+  opacity: 0.9;
+  transition-duration: 0.9s;
+}
+.aurora[data-mood="approval"] .aurora-field {
+  opacity: calc(var(--aurora-strength) * 0.78);
+}
+.aurora[data-mood="error"] .aurora-field {
+  transform: scale(0.98);
+  opacity: calc(var(--aurora-strength) * 0.7);
+}
+.aurora[data-mood="error"] .aurora-veil {
+  opacity: 0.5;
+}
+
+@keyframes aurora-a {
+  30% {
+    transform: translate(-7%, 6%) rotate(16deg) scale(1.1, 0.92);
+  }
+  65% {
+    transform: translate(-12%, -3%) rotate(-10deg) scale(0.94, 1.08);
+  }
+  100% {
+    transform: translate(-3%, 9%) rotate(8deg) scale(1.06, 1);
+  }
+}
+
+@keyframes aurora-b {
+  35% {
+    transform: translate(9%, -7%) rotate(-14deg) scale(1.12, 0.9);
+  }
+  70% {
+    transform: translate(4%, -13%) rotate(12deg) scale(0.92, 1.1);
+  }
+  100% {
+    transform: translate(11%, -2%) rotate(-4deg) scale(1.04, 1.04);
+  }
+}
+
+@keyframes aurora-c {
+  50% {
+    transform: translate(14%, -10%) rotate(28deg) scale(1.15, 0.88);
+  }
+  100% {
+    transform: translate(6%, 8%) rotate(-12deg) scale(0.95, 1.1);
+  }
+}
+
+@keyframes aurora-d {
+  40% {
+    transform: translate(-10%, -8%) rotate(20deg) scale(0.9, 1.12);
+  }
+  100% {
+    transform: translate(-4%, -14%) rotate(-16deg) scale(1.1, 0.94);
+  }
+}
+
+@keyframes energy-breathe {
+  from {
+    transform: scale(0.9, 0.82);
+  }
+  to {
+    transform: translateY(-6%) scale(1.08, 1.02);
+  }
+}
+
+@media (max-width: 639px) {
+  .aurora-b4 {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora * {
+    animation: none !important;
+  }
+}
+
+/* The chip-wall marquee pauses while its section is off screen. */
+[data-marquee-paused="true"] [data-marquee] {
+  animation-play-state: paused;
+}
+
+/* Sections with ambient loops (rings, glows, floats) pause them while off screen. */
+[data-paused="true"] *,
+[data-paused="true"] *::before,
+[data-paused="true"] *::after {
+  animation-play-state: paused !important;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  html {
+    /* no 300ms-style double-tap zoom on iOS; pinch zoom still works */
+    touch-action: manipulation;
+    background-color: var(--canvas);
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* No long-press callout on tappable controls (iOS). */
+  a,
+  button {
+    -webkit-touch-callout: none;
+  }
+
+  .font-display {
+    font-family: "Space Grotesk", sans-serif;
+  }
+
+  .font-body {
+    font-family: "Inter", sans-serif;
+  }
+
+  .font-code {
+    font-family: "IBM Plex Mono", monospace;
+  }
+}
+
+/* Keyboard focus: a clear accent ring (unlayered so it beats the utility outlines). */
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Scrollbars everywhere: a slim rounded thumb that follows the theme, on a clear track.
+   WebKit/Blink get the shaped thumb; Firefox (no ::-webkit-scrollbar) gets the standard thin bar.
+   The standard properties are kept out of WebKit on purpose: setting them disables the custom thumb. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--muted) 38%, transparent) padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--muted) 62%, transparent);
+}
+::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in oklab, var(--accent) 70%, transparent);
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--muted) 45%, transparent) transparent;
+  }
+}
+
+/* Scrollable code snippets: hide the bar in WebKit too (scrollbar-width isn't enough on older Safari). */
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+::selection {
+  background: var(--glow);
+}
+
+/* Respect the user's motion preference: keep states, drop movement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,4 @@
+# HTTPS in front of Opsmira with Caddy. Set OPSMIRA_TRUST_PROXY=1 in Opsmira's settings.
+opsmira.example.com {
+	reverse_proxy 127.0.0.1:8787
+}

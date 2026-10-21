@@ -1,0 +1,24 @@
+# systemd unit for running Opsmira directly on a server (so it manages that server).
+# Install: copy to /etc/systemd/system/opsmira.service, adjust User and paths, then
+#   systemctl daemon-reload && systemctl enable --now opsmira
+[Unit]
+Description=Opsmira
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opsmira
+WorkingDirectory=/opt/opsmira
+EnvironmentFile=/etc/opsmira.env
+Environment=OPSMIRA_DATA_DIR=/var/lib/opsmira
+ExecStart=/usr/bin/node server/src/index.js
+Restart=on-failure
+RestartSec=3
+StateDirectory=opsmira
+# The agent can only do what this user can do. Give it the access you want it to have, no more.
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

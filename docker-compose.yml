@@ -1,0 +1,18 @@
+# docker compose up -d
+# Put OPENROUTER_API_KEY (and anything else from .env.example) in a .env file next to this one.
+services:
+  opsmira:
+    image: ghcr.io/devbash1/opsmira:latest
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      # Local only. Put HTTPS in front (see docs/self-hosting.md) before exposing it.
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - opsmira-data:/data
+      # To manage other servers over SSH, uncomment so the container can use your keys and trusted hosts:
+      # - ~/.ssh:/home/node/.ssh:ro
+
+volumes:
+  opsmira-data:
