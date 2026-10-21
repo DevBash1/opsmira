@@ -15,12 +15,46 @@ function safeEqual(a, b) {
   return timingSafeEqual(bufA, bufB);
 }
 
-export function checkPassword(candidate) {
-  if (typeof candidate !== "string" || !candidate) return false;
-  const a = Buffer.from(candidate);
-  const b = Buffer.from(env.password);
-  if (a.length !== b.length) return false;
+/** Constant-time comparison that also hides the length of the real value. */
+function sameSecret(candidate, actual) {
+  const a = createHmac("sha256", "opsmira-compare").update(String(candidate)).digest();
+  const b = createHmac("sha256", "opsmira-compare").update(String(actual)).digest();
   return timingSafeEqual(a, b);
+}
+
+/** Both are always checked, so a wrong username takes as long to refuse as a wrong password. */
+export function checkLogin(username, password) {
+  const userOk = sameSecret(typeof username === "string" ? username.trim().toLowerCase() : "", env.username.toLowerCase());
+  const passOk = typeof password === "string" && password.length > 0 && sameSecret(password, env.password);
+  return userOk && passOk;
+}
+
+/* Failed sign-ins per address: 5 in 10 minutes, then wait. Keeps the shared password from being guessed. */
+const WINDOW_MS = 10 * 60 * 1000;
+const MAX_FAILURES = 5;
+const failures = new Map();
+
+/** Seconds to wait before this address may try again, or 0. */
+export function loginBlockedFor(ip) {
+  const entry = failures.get(ip);
+  if (!entry) return 0;
+  if (entry.resetAt <= Date.now()) {
+    failures.delete(ip);
+    return 0;
+  }
+  return entry.count >= MAX_FAILURES ? Math.ceil((entry.resetAt - Date.now()) / 1000) : 0;
+}
+
+export function noteLoginFailure(ip) {
+  const now = Date.now();
+  const entry = failures.get(ip);
+  if (!entry || entry.resetAt <= now) failures.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+  else entry.count++;
+  if (failures.size > 5000) for (const [key, value] of failures) if (value.resetAt <= now) failures.delete(key);
+}
+
+export function clearLoginFailures(ip) {
+  failures.delete(ip);
 }
 
 /** Issues a fresh, unique session cookie and returns its session id. */

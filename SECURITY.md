@@ -16,7 +16,8 @@ operating-system user it runs under. That is the product, and also the risk.
 
 - Keep `HOST=127.0.0.1` and put HTTPS in front (see `docs/self-hosting.md`). The login is one shared password;
   do not send it over plain HTTP.
-- Choose a long password, or let Opsmira generate one.
+- Choose a long password, or let Opsmira generate one. Sign-in is one shared username and password, and
+  an address is blocked for 10 minutes after 5 wrong attempts. Per-user accounts are on the roadmap.
 - Chats, memory and the audit log can contain command output. The data directory is sensitive; back it up
   and protect it like any other secret store.
 - Model providers see what the agent sees, including command output. Use a provider you trust.

@@ -41,12 +41,14 @@ function persisted(name, make) {
   return { value, created: true };
 }
 
+const username = (process.env.OPSMIRA_USERNAME ?? "").trim().slice(0, 64) || "admin";
+
 let password = process.env.OPSMIRA_PASSWORD;
 if (!password) {
   const made = persisted(".admin-password", () => randomBytes(9).toString("base64url"));
   password = made.value;
   if (made.created) {
-    console.log(`\nGenerated an admin password (saved to ${join(dataDir, ".admin-password")}):\n  ${password}\n`);
+    console.log(`\nSign in with username "${username}" and this generated password (saved to ${join(dataDir, ".admin-password")}):\n  ${password}\n`);
   }
 }
 
@@ -58,6 +60,7 @@ export const env = {
   openrouterApiKey: process.env.OPENROUTER_API_KEY,
   openrouterBaseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
   model: process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4.5",
+  username,
   password,
   // Stable across restarts, so owners are not signed out every time the server restarts.
   sessionSecret: persisted(".session-secret", () => randomBytes(32).toString("hex")).value,

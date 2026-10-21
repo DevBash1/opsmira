@@ -32,8 +32,8 @@ npm run build
 npm start                          # http://127.0.0.1:8787
 ```
 
-Open `http://127.0.0.1:8787`. The admin password is printed on first start and saved in
-`server/data/.admin-password`.
+Open `http://127.0.0.1:8787` and sign in. The username is `admin` unless you set `OPSMIRA_USERNAME`; the
+password is printed on first start and saved in `server/data/.admin-password` (or set `OPSMIRA_PASSWORD`).
 
 With Docker:
 

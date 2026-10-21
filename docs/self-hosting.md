@@ -18,7 +18,7 @@ There is no database to run.
 git clone https://github.com/DevBash1/opsmira.git && cd opsmira
 cp .env.example .env              # set OPENROUTER_API_KEY
 docker compose up -d --build
-docker compose logs opsmira       # the admin password is printed on first start
+docker compose logs opsmira       # username (admin) and the generated password are printed on first start
 ```
 
 Data lives in the `opsmira-data` volume (`/data`). If you bind-mount a host directory there instead, it must be
@@ -103,6 +103,7 @@ All settings are environment variables; see [`.env.example`](../.env.example). T
 | Variable | Default | |
 |---|---|---|
 | `OPENROUTER_API_KEY` | required | Model provider key |
+| `OPSMIRA_USERNAME` | `admin` | Console username |
 | `OPSMIRA_PASSWORD` | generated | Console password |
 | `HOST` / `PORT` | `127.0.0.1` / `8787` | Where it listens |
 | `OPSMIRA_DATA_DIR` | `server/data` (`/data` in Docker) | Everything Opsmira stores |

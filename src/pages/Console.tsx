@@ -176,7 +176,16 @@ const DISCLAIMER: Record<AgentMode, string> = {
   full: "Full access is on. The agent runs commands, changes included, without asking.",
 };
 
+const USERNAME_KEY = "opsmira_username";
+
 function LoginGate({ onAuthed, onMood }: { onAuthed: () => void; onMood: (mood: AuroraMood) => void }) {
+  const [username, setUsername] = useState(() => {
+    try {
+      return localStorage.getItem(USERNAME_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -189,7 +198,12 @@ function LoginGate({ onAuthed, onMood }: { onAuthed: () => void; onMood: (mood: 
     setError("");
     onMood("thinking");
     try {
-      await api.login(password);
+      await api.login(username, password);
+      try {
+        localStorage.setItem(USERNAME_KEY, username.trim());
+      } catch {
+        // remembering the name is only a convenience
+      }
       onMood("idle");
       onAuthed();
     } catch (err) {
@@ -218,12 +232,33 @@ function LoginGate({ onAuthed, onMood }: { onAuthed: () => void; onMood: (mood: 
           <div className="font-display text-[18px] font-semibold text-[var(--ink)]">Opsmira console</div>
         </div>
         <p className="text-[13px]/[20px] text-[var(--muted)]">
-          Enter the admin password printed to the server's console on first boot (saved in <code className="font-code">server/.env</code>).
+          Sign in with the username and password for this server. If you never set them, the username is{" "}
+          <code className="font-code">admin</code> and the password was printed to the server log on first start.
         </p>
-        <div className="flex w-full flex-col">
+        <div className="flex w-full flex-col gap-[10px]">
           <input
-            autoFocus
+            autoFocus={!username}
+            type="text"
+            name="username"
+            autoComplete="username"
+            autoCapitalize="off"
+            spellCheck={false}
+            value={username}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              if (error) {
+                setError("");
+                onMood("idle");
+              }
+            }}
+            placeholder="Username"
+            className="w-full rounded-[10px] bg-[var(--canvas)] p-[12px_14px] text-[14px] text-[var(--ink)] outline-none transition-[outline-color,box-shadow] duration-200 ease-enter [outline:1px_solid_var(--line)] [outline-offset:-0.5px] focus:[box-shadow:0px_0px_0px_4px_var(--glow)] focus:[outline-color:var(--accent)]"
+          />
+          <input
+            autoFocus={!!username}
             type="password"
+            name="password"
+            autoComplete="current-password"
             value={password}
             onChange={(e) => {
               setPassword(e.target.value);
@@ -247,7 +282,7 @@ function LoginGate({ onAuthed, onMood }: { onAuthed: () => void; onMood: (mood: 
         </div>
         <button
           type="submit"
-          disabled={busy || !password}
+          disabled={busy || !password || !username.trim()}
           className="flex w-full cursor-pointer flex-row items-center justify-center gap-[8px] rounded-[10px] bg-[var(--accent)] p-[12px] text-[14px] font-semibold text-[var(--canvas)] transition-[background-color,transform,translate,scale] duration-200 ease-enter hover:bg-[var(--accent-strong)] active:scale-[0.98] active:duration-[120ms] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy && <Spinner size={16} />}

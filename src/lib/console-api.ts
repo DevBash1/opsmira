@@ -195,8 +195,8 @@ export type AgentInfo = {
 
 export const api = {
   me: () => fetch("/api/me").then((r) => json<{ authenticated: boolean }>(r)),
-  login: (password: string) =>
-    fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) }).then(
+  login: (username: string, password: string) =>
+    fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) }).then(
       (r) => json<{ ok: true }>(r),
     ),
   logout: () => fetch("/api/logout", { method: "POST" }),

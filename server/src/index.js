@@ -5,7 +5,10 @@ import cookieParser from "cookie-parser";
 import { randomUUID } from "crypto";
 import { env } from "./env.js";
 import {
-  checkPassword,
+  checkLogin,
+  clearLoginFailures,
+  loginBlockedFor,
+  noteLoginFailure,
   issueSessionCookie,
   clearSessionCookie,
   requireAuth,
@@ -53,10 +56,18 @@ app.get("/agent/:file", (req, res) => {
 });
 
 app.post("/api/login", (req, res) => {
-  if (!checkPassword(req.body?.password)) {
-    res.status(401).json({ error: "Wrong password" });
+  const wait = loginBlockedFor(req.ip);
+  if (wait) {
+    res.setHeader("Retry-After", String(wait));
+    res.status(429).json({ error: `Too many attempts. Try again in ${Math.ceil(wait / 60)} minute${wait > 90 ? "s" : ""}.` });
     return;
   }
+  if (!checkLogin(req.body?.username, req.body?.password)) {
+    noteLoginFailure(req.ip);
+    res.status(401).json({ error: "Wrong username or password" });
+    return;
+  }
+  clearLoginFailures(req.ip);
   issueSessionCookie(req, res);
   res.json({ ok: true });
 });
