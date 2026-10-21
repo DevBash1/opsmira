@@ -105,6 +105,13 @@ infrastructure). The AGPL repository never needs billing code in it.
   commercial features in the combined work) or only a DCO sign-off (lighter, but no relicensing).
   Decided: CLA (`CLA.md`, draft pending legal review, enforced by `.github/workflows/cla.yml`).
 
+## Progress
+
+A first slice of Phase 3 exists in the self-hosted app: `agent/opsmira-agent.mjs`, the gateway in
+`server/src/agents.js` (pairing, credentials, revoke, heartbeat), and `agentMachine` in `machine.js`. All
+surfaces work through it with no change to collectors or the UI. Not built yet: the install script and
+service, running approved changes through an agent, and an agent-side policy file.
+
 ## Phases
 
 1. **Self-host polish (now):** this repository, Docker, docs, CI, releases.

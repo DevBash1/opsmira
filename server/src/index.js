@@ -21,6 +21,7 @@ import { appendAudit, deleteArtifact, listArtifacts, listConversations, readArti
 import { buildLastTurn, rewindLast } from "./history.js";
 import { startSampler } from "./metrics.js";
 import { knownHosts } from "./machine.js";
+import { AGENT_PATH, attachAgentGateway, createPairingToken, listAgents, revokeAgent } from "./agents.js";
 import { collectSurface, surfaceList } from "./surfaces.js";
 
 const app = express();
@@ -37,6 +38,13 @@ function conversationIdFromRequest(req) {
   const id = req.get("x-opsmira-conversation");
   return typeof id === "string" && CONVERSATION_ID.test(id) ? id : undefined;
 }
+
+// The agent program itself. Public on purpose: it is only code. What authorizes an agent is the token.
+app.get("/agent/opsmira-agent.mjs", (req, res) => {
+  res.type("text/javascript").sendFile(env.agentFile, (err) => {
+    if (err && !res.headersSent) res.status(404).type("text").send("The agent file is not part of this install.");
+  });
+});
 
 app.post("/api/login", (req, res) => {
   if (!checkPassword(req.body?.password)) {
@@ -105,6 +113,30 @@ app.post("/api/rewind", (req, res) => {
 /** The live surfaces this server can read, and a fresh reading of one (used by the Surfaces menu). */
 app.get("/api/surfaces", (req, res) => {
   res.json({ surfaces: surfaceList() });
+});
+
+app.get("/api/agents", (req, res) => {
+  res.json({ agents: listAgents() });
+});
+
+/** A one-time command that connects a server to this console. */
+app.post("/api/agents/token", (req, res) => {
+  const { token, expiresAt } = createPairingToken();
+  const origin = `${req.protocol}://${req.get("host")}`;
+  const ws = origin.replace(/^http/, "ws") + AGENT_PATH;
+  res.json({
+    token,
+    expiresAt,
+    command: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs && node opsmira-agent.mjs --server ${ws} --token ${token}`,
+  });
+});
+
+app.delete("/api/agents/:id", (req, res) => {
+  if (!revokeAgent(req.params.id)) {
+    res.status(404).json({ error: "No such server" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 app.get("/api/hosts", (req, res) => {
@@ -404,6 +436,7 @@ if (existsSync(join(env.webDir, "index.html"))) {
 
 startSampler();
 
-app.listen(env.port, env.host, () => {
+const server = app.listen(env.port, env.host, () => {
   console.log(`Opsmira server listening on http://${env.host}:${env.port}`);
 });
+attachAgentGateway(server);

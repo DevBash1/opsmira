@@ -64,6 +64,8 @@ export const env = {
   dataDir,
   /** The built web app (`npm run build`). Served by this server when it exists. */
   webDir: process.env.OPSMIRA_WEB_DIR ? resolve(process.env.OPSMIRA_WEB_DIR) : join(SERVER_DIR, "..", "dist"),
+  /** The agent program servers download to connect themselves. */
+  agentFile: join(SERVER_DIR, "..", "agent", "opsmira-agent.mjs"),
   /** Also serve the marketing pages. Off by default: a self-hosted install opens straight into the console. */
   site: truthy(process.env.OPSMIRA_SITE),
   /** Behind a reverse proxy that terminates TLS: trust X-Forwarded-* so cookies are marked secure. */

@@ -75,6 +75,21 @@ over SSH. Requirements:
 - Key-based login that works without a prompt (`BatchMode`). Passwords and passphrase prompts do not work.
 - Read access is enough for surfaces. Changes the agent proposes run over SSH as that user.
 
+## Connect a server without SSH (agent)
+
+Open **Surfaces**, choose **Connect a server**, and run the command it shows on the server (Node 22+). The
+agent dials out to the console, so the server needs no open port and you hand over no key.
+
+- The command contains a one-time token that expires in an hour. After pairing, the agent keeps a long-lived
+  credential in `~/.opsmira-agent.json` (mode 0600); the console stores only a hash of it.
+- It reconnects by itself. **Remove** in the Surfaces menu revokes it at once and the agent stops.
+- Read-only by default: the agent runs only the read-only programs the surfaces use (`--access full` lifts that
+  limit on the agent; changes through agents are not wired up yet). It runs as the user that started it, so run
+  it as an unprivileged user.
+- Use HTTPS (`wss://`). Over plain `ws://` the credential crosses the network unencrypted; the agent warns you.
+- Run it as a service so it survives reboots, for example a systemd unit that runs
+  `node /opt/opsmira-agent/opsmira-agent.mjs --server wss://... --state /var/lib/opsmira-agent/state.json`.
+
 ## Settings
 
 All settings are environment variables; see [`.env.example`](../.env.example). The ones that matter:

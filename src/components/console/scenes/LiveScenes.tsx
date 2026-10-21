@@ -1,5 +1,5 @@
 import { Action, KeyValue, LiveMeta, Notice, Panel, SceneFooter, SceneIntro, StatRow, Status, Table, Tag } from "../SceneKit";
-import { bytes, clock, dateTime, duration, relative } from "./format";
+import { bytes, clock, dateTime, duration, fromServer, relative } from "./format";
 import type { SceneProps } from "./DiagnosticScenes";
 
 /* Surfaces for services, schedules, certificates, exposure and cleanup. Like the diagnostic ones, every
@@ -99,7 +99,7 @@ export function UptimeScene({ data, onAsk }: SceneProps) {
       <div className="flex w-full flex-row flex-wrap items-center justify-between gap-[12px]">
         <LiveMeta>
           Read at {clock(d.at, true)}
-          {d.ssh ? ` over SSH from ${d.ssh}` : ""}
+          {fromServer(d.ssh)}
         </LiveMeta>
         {failed[0] && <AskAction onAsk={onAsk} prompt={`Why did ${failed[0].name} fail? Check its recent logs.`}>{`Why did ${failed[0].name} fail`}</AskAction>}
       </div>

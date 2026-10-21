@@ -178,6 +178,19 @@ async function json<T>(res: Response): Promise<T> {
 const post = (url: string, body: unknown) =>
   fetch(url, { method: "POST", headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
 
+/** A server that connected itself (opsmira-agent). `host` is what the surfaces take: agent:<name>. */
+export type AgentInfo = {
+  id: string;
+  name: string;
+  host: string;
+  online: boolean;
+  access: "read-only" | "full" | null;
+  hostname: string | null;
+  platform: string | null;
+  createdAt: string;
+  lastSeen: string | null;
+};
+
 export const api = {
   me: () => fetch("/api/me").then((r) => json<{ authenticated: boolean }>(r)),
   login: (password: string) =>
@@ -210,6 +223,9 @@ export const api = {
     );
   },
   hosts: () => fetch("/api/hosts").then((r) => json<{ hosts: string[] }>(r)),
+  agents: () => fetch("/api/agents").then((r) => json<{ agents: AgentInfo[] }>(r)),
+  agentToken: () => post("/api/agents/token", {}).then((r) => json<{ token: string; expiresAt: number; command: string }>(r)),
+  removeAgent: (id: string) => fetch(`/api/agents/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers() }).then((r) => json<{ ok: true }>(r)),
   audit: () => fetch("/api/audit").then((r) => json<{ entries: AuditEntry[] }>(r)),
   models: () => fetch("/api/models").then((r) => json<{ models: ModelInfo[]; default: string }>(r)),
   approve: (id: string, confirmText?: string, model?: string, mode: AgentMode = "ask") =>

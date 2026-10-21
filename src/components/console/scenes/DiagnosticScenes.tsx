@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Icon } from "../../Icons";
 import { Action, Bars, LiveMeta, LogPanel, Notice, Panel, Ring, SceneFooter, SceneIntro, StackedBar, StatRow, Status, Table, Tag } from "../SceneKit";
-import { bitRate, bytes, clock, dateTime, duration, historyLabels, historyNote } from "./format";
+import { bitRate, bytes, clock, dateTime, duration, fromServer, historyLabels, historyNote } from "./format";
 
 /* Every surface renders readings the server took from the machine. Nothing here has a fallback value:
  * a field that is missing is simply not shown. */
@@ -14,7 +14,7 @@ function Snapshot({ data }: { data?: Record<string, any> }) {
   return (
     <LiveMeta>
       Read at {clock(data?.at, true)}
-      {data?.ssh ? ` over SSH from ${data.ssh}` : ""}
+      {fromServer(data?.ssh)}
     </LiveMeta>
   );
 }

@@ -22,6 +22,7 @@ ENV NODE_ENV=production \
 COPY server/package.json server/package-lock.json ./server/
 RUN npm ci --omit=dev --prefix server
 COPY server/src ./server/src
+COPY agent ./agent
 COPY --from=web /app/dist ./dist
 RUN mkdir -p /data && chown -R node:node /data
 USER node

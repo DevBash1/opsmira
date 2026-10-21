@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import os from "os";
 import { join } from "path";
 import { env } from "./env.js";
+import { AGENT_PREFIX, agentByName, callAgent, isOnline, listAgents } from "./agents.js";
 
 const DATA = env.dataDir;
 const HOSTS_FILE = join(DATA, "hosts.json");
@@ -12,6 +13,9 @@ const HOSTS_FILE = join(DATA, "hosts.json");
 /** [user@]name[:port]. No leading dash, so a host can never be read as an ssh option. */
 const HOST_RE = /^(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9][A-Za-z0-9._-]*(?::\d{1,5})?$/;
 export const parseHost = (host) => (typeof host === "string" && host.length <= 120 && HOST_RE.test(host.trim()) ? host.trim() : null);
+
+/** What `home()` asks a remote machine. The agent's read-only policy allows exactly this script. */
+export const HOME_SCRIPT = 'printf %s "$HOME"';
 
 /** Quote one word for the remote shell. */
 const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
@@ -150,7 +154,7 @@ export function sshMachine(host) {
       return (await run("test", ["-d", path])).ok;
     },
     async home() {
-      const r = await run("sh", ["-c", 'printf %s "$HOME"']);
+      const r = await run("sh", ["-c", HOME_SCRIPT]);
       return r.ok && r.stdout ? r.stdout.trim() : "/";
     },
     async name() {
@@ -173,9 +177,68 @@ export function sshMachine(host) {
   return machine;
 }
 
+/* ---------------- a server that connected itself (opsmira-agent) ---------------- */
+const agentMachines = new Map();
+export function agentMachine(name) {
+  const known = agentMachines.get(name);
+  if (known) return known;
+  const host = `${AGENT_PREFIX}${name}`;
+  // Looked up on every call: the agent may be re-created or revoked while this object is cached.
+  const run = async (file, args = [], { timeout = 12000, input } = {}) => {
+    const agent = agentByName(name);
+    if (!agent) return { ok: false, code: null, stdout: "", stderr: "agent not found" };
+    const r = await callAgent(agent.id, "run", { file, args, timeout, input }, timeout + 4000);
+    if (r.code === 127 || /not installed/.test(r.stderr)) return { ...r, stderr: "not installed" };
+    return r;
+  };
+  let hostname = null;
+  const machine = {
+    host,
+    label: host,
+    run,
+    async readFile(path) {
+      const r = await run("cat", [path]);
+      return r.ok ? r.stdout : null;
+    },
+    async listDir(path) {
+      const r = await run("ls", ["-1A", path]);
+      return r.ok ? r.stdout.split("\n").filter((f) => f && !f.startsWith(".")) : null;
+    },
+    async isDir(path) {
+      return (await run("test", ["-d", path])).ok;
+    },
+    async home() {
+      const r = await run("sh", ["-c", HOME_SCRIPT]);
+      return r.ok && r.stdout ? r.stdout.trim() : "/";
+    },
+    async name() {
+      if (hostname) return hostname;
+      const info = agentByName(name)?.info?.hostname;
+      if (info) return (hostname = info);
+      const r = await run("hostname");
+      return r.ok && r.stdout.trim() ? (hostname = r.stdout.trim()) : name;
+    },
+    async check() {
+      const agent = agentByName(name);
+      if (!agent) return { reason: `No connected server is named ${name}.`, hint: "Open Surfaces, then Connect a server, to add one." };
+      if (!isOnline(agent.id)) {
+        return { reason: `${name} is not connected right now.`, hint: "Check that opsmira-agent is running on that server. It reconnects by itself when it can reach this console." };
+      }
+      const r = await run("true", [], { timeout: 6000 });
+      return r.ok ? null : { reason: `${name} did not answer.`, hint: r.stderr || undefined };
+    },
+  };
+  agentMachines.set(name, machine);
+  return machine;
+}
+
 /** The machine for a request: this server when no host is given. Null when the host text isn't valid. */
 export function machineFor(host) {
   if (!host) return local;
+  if (typeof host === "string" && host.startsWith(AGENT_PREFIX)) {
+    const name = host.slice(AGENT_PREFIX.length).trim();
+    return /^[a-z0-9][a-z0-9._-]{0,39}$/.test(name) ? agentMachine(name) : null;
+  }
   const valid = parseHost(host);
   return valid ? sshMachine(valid) : null;
 }
@@ -215,5 +278,6 @@ export function knownHosts() {
     // no ssh config
   }
   for (const h of savedHosts()) found.add(h);
+  for (const a of listAgents()) found.add(a.host);
   return [...found];
 }

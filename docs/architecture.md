@@ -28,7 +28,8 @@ suggestions. Scenes live in `src/components/console/scenes/`.
 | `index.js` | HTTP routes, login, static files |
 | `ai.js` | The agent loop and the tool schema (`inspect`, `propose_action`, `show_surface`, `show_view`, memory, artifacts…) |
 | `exec.js` | Runs local commands; classifies read-only versus changing |
-| `machine.js` | The `Machine` interface: local or SSH. Every collector takes one |
+| `machine.js` | The `Machine` interface: local, SSH, or a connected agent. Every collector takes one |
+| `agents.js` | Agent gateway: one-time tokens, credentials, WebSocket calls to connected servers |
 | `surfaces.js` | Collectors: real readings or an "unavailable" result with a reason |
 | `metrics.js` | Per-machine samplers (a ring of recent readings) |
 | `view.js` | Checks and cleans agent-composed views |

@@ -5,6 +5,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Connect a server without SSH: `opsmira-agent` (one file, Node 22+) dials out to the console with a one-time
+  token, then answers read-only requests. Surfaces work on it as `agent:<name>`. Revoke it from the Surfaces menu.
+- CLA and sign-in workflow for outside contributions (`CLA.md` is a draft pending legal review).
+
 ## [0.1.0] - 2026-10-21
 
 First self-hostable release.

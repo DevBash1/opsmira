@@ -45,7 +45,7 @@ export function parseMeminfo(text) {
 }
 
 /** One shell run that returns everything a tick needs, so a remote tick is a single ssh exec. */
-const REMOTE_TICK =
+export const REMOTE_TICK =
   "cat /proc/stat; echo; echo --opsmira--; cat /proc/meminfo; echo --opsmira--; cat /proc/net/dev; echo --opsmira--; cat /proc/loadavg /proc/uptime; echo --opsmira--; grep -c ^processor /proc/cpuinfo; grep -m1 'model name' /proc/cpuinfo";
 
 async function readRaw(machine) {

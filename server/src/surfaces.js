@@ -275,9 +275,12 @@ function probe(port) {
 }
 
 /** Whether each port accepts a connection. On another server the check runs there, without a timing. */
+export const portProbeScript = (ports) =>
+  `for p in ${ports.join(" ")}; do if timeout 1 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then echo "$p up"; else echo "$p down"; fi; done`;
+
 async function probePorts(m, ports) {
   if (!m.host) return Promise.all(ports.map(probe));
-  const script = `for p in ${ports.join(" ")}; do if timeout 1 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then echo "$p up"; else echo "$p down"; fi; done`;
+  const script = portProbeScript(ports);
   const res = await m.run("sh", ["-c", script], { timeout: 15000 });
   const up = new Set(res.stdout.split("\n").filter((l) => l.endsWith(" up")).map((l) => Number(l.split(" ")[0])));
   return ports.map((port) => ({ port, up: up.has(port), ms: null }));

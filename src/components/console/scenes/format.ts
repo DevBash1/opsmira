@@ -59,6 +59,12 @@ export function historyLabels(h: { from: string; to: string } | null | undefined
   return [clock(h.from), clock(new Date(a + (b - a) / 2).toISOString()), "Now"];
 }
 
+/** How a remote reading is described: servers reached over SSH, or ones that connected themselves (agent:name). */
+export function fromServer(ssh: unknown): string {
+  if (typeof ssh !== "string" || !ssh) return "";
+  return ssh.startsWith("agent:") ? ` from ${ssh.slice(6)}` : ` over SSH from ${ssh}`;
+}
+
 export function historyNote(h: { spanSeconds: number } | null | undefined, what: string, remote = false): string {
   if (!h) return remote ? `${what} history starts when you first look at this server and builds while you watch. Give it a minute.` : `${what} history builds up while the server runs. Check back in a minute.`;
   return `${what} over the last ${h.spanSeconds >= 90 ? `${Math.round(h.spanSeconds / 60)} minutes` : "minute"}, measured on this server.`;

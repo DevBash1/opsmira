@@ -7,6 +7,7 @@ Rough order, not promises. Open an issue to discuss anything here.
 - [x] v0.1: console, live surfaces, SSH, agent-composed views, audit log, Docker image
 - [ ] Multiple users and roles (today: one shared password)
 - [ ] Per-host settings: allowed commands, default mode, labels
+- [x] Connect servers without SSH (agent, read-only surfaces; installer and changes through it come next)
 - [ ] Alerts: notify when a surface crosses a threshold (email, webhook)
 - [ ] Composed views that refresh live from a read-only command
 - [ ] Plugin surfaces: add a collector without touching core

@@ -7,6 +7,7 @@ import { Markdown } from "../components/Markdown";
 import { SceneView } from "../components/console/scenes";
 import { DestructiveScene, OfflineScene, PermissionScene } from "../components/console/scenes/StateScenes";
 import { Aurora, type AuroraMood } from "../components/console/Aurora";
+import { ConnectServer } from "../components/console/ConnectServer";
 import { IconButton } from "../components/console/IconButton";
 import { ModelChip } from "../components/console/ModelChip";
 import { ModeChip } from "../components/console/ModeChip";
@@ -1655,7 +1656,7 @@ function ConsoleApp({
                 list="surface-hosts"
                 value={surfaceHost}
                 onChange={(e) => setSurfaceHost(e.target.value)}
-                placeholder="This server, or name / user@host over SSH"
+                placeholder="This server, user@host over SSH, or agent:name"
                 spellCheck={false}
                 autoCapitalize="off"
                 autoComplete="off"
@@ -1667,6 +1668,12 @@ function ConsoleApp({
                 ))}
               </datalist>
             </div>
+            <ConnectServer
+              onPick={(host) => {
+                setSurfaceHost(host);
+                api.hosts().then((r) => setKnownHosts(r.hosts)).catch(() => {});
+              }}
+            />
             <div className="grid w-full grid-cols-1 gap-[2px] sm:grid-cols-2 lg:grid-cols-3">
               {surfaces?.map((scene, i) => (
                 <button
