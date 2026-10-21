@@ -1,5 +1,5 @@
 # Opsmira: web app build, then a small runtime image with the server.
-FROM node:22-slim AS web
+FROM node:25-slim AS web
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -8,7 +8,7 @@ COPY public ./public
 COPY src ./src
 RUN npm run build
 
-FROM node:22-slim
+FROM node:25-slim
 # ssh is how Opsmira reads and manages other servers.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssh-client ca-certificates procps \
