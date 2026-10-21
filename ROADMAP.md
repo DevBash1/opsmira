@@ -19,5 +19,5 @@ server to your account.
 
 ## Project
 
-- [ ] Decide the contributor agreement (CLA) and enable the sign-in bot before accepting outside pull requests
+- [x] Contributor agreement: CLA with a sign-in bot (`CLA.md` is a draft, needs legal review before going public)
 - [ ] Make the repository public

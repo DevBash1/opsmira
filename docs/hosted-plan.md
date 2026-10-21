@@ -101,9 +101,9 @@ infrastructure). The AGPL repository never needs billing code in it.
 
 - This repository is AGPL-3.0. Cloud-only code lives in the private repository and talks to this one through
   the `Store`/`Auth`/`Machine` interfaces and a network API, so it is a separate program.
-- **Decide before the first outside pull request is merged:** a CLA (lets us relicense or ship
-  commercial features in the combined work) or only a DCO sign-off (lighter, but no relicensing). Recommended: CLA.
-  See `CONTRIBUTING.md`.
+- **CLA vs DCO:** a CLA (lets us relicense or ship
+  commercial features in the combined work) or only a DCO sign-off (lighter, but no relicensing).
+  Decided: CLA (`CLA.md`, draft pending legal review, enforced by `.github/workflows/cla.yml`).
 
 ## Phases
 

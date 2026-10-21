@@ -11,10 +11,10 @@ Thanks for helping. This guide covers setup, how to propose a change, and what w
 
 ## Contributor agreement
 
-Opsmira is licensed [AGPL-3.0-only](LICENSE). Before we merge pull requests from people outside the
-maintainer team, contributors will be asked to accept a Contributor License Agreement (CLA) so the project can
-offer a hosted service and commercial features. A bot will ask you to sign on your first pull request. Until
-that is set up the repository is private and not taking outside contributions.
+Opsmira is licensed [AGPL-3.0-only](LICENSE). You keep ownership of what you contribute. On your first pull
+request a bot asks you to sign the [CLA](CLA.md) by posting one comment; it lets the project offer a hosted
+service and commercial features alongside the open-source version. Pull requests cannot be merged until the
+check passes. (The CLA text is a draft pending legal review.)
 
 ## Setup
 
