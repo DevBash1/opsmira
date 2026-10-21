@@ -2,8 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-process.env.OPENROUTER_API_KEY ||= "test";
-process.env.OPSMIRA_DATA_DIR ||= (await import("node:os")).tmpdir() + "/opsmira-test-data";
+import "./setup.js";
 const { deriveScene } = await import("../src/views.js");
 
 const listing = "-rwxr-xr-x 1 root root 30000000 Oct 21 05:31 tool\ndrwxr-xr-x 2 root root 4096 Oct 21 20:04 lib";

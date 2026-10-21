@@ -1,7 +1,8 @@
 // show_view: the agent's blocks are checked and cleaned before anything is drawn.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeView } from "../src/view.js";
+import "./setup.js";
+const { normalizeView } = await import("../src/view.js");
 
 test("a valid view keeps its blocks", () => {
   const result = normalizeView({
