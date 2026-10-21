@@ -21,6 +21,9 @@ docker compose up -d --build
 docker compose logs opsmira       # the admin password is printed on first start
 ```
 
+Data lives in the `opsmira-data` volume (`/data`). If you bind-mount a host directory there instead, it must be
+owned by uid 1000 (`sudo chown 1000:1000 ./data`), or the first start fails with a permission error.
+
 The container sees itself, not the host. Its surfaces show the container's memory, processes and disk.
 To manage the host or other machines, mount your SSH keys (see `docker-compose.yml`) and add them as servers,
 or run Opsmira directly on the host.

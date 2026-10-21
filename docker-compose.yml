@@ -5,7 +5,12 @@ services:
     image: ghcr.io/devbash1/opsmira:latest
     build: .
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
+    # Without a .env file, set OPENROUTER_API_KEY here instead:
+    # environment:
+    #   OPENROUTER_API_KEY: sk-or-...
     ports:
       # Local only. Put HTTPS in front (see docs/self-hosting.md) before exposing it.
       - "127.0.0.1:8787:8787"
