@@ -9,7 +9,8 @@
 // Later runs: reconnect with the credential, forever, with backoff.
 //
 // --access read-only  (default) only the read-only programs the console's surfaces use
-// --access full       anything the console asks for, as the user this runs as
+// --access operate    also lets the console run shell commands (the console asks its owner before any
+//                     change; this is the setting that makes the agent able to act). "full" means the same.
 import { spawn } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -34,7 +35,7 @@ const PLAIN_READ = new Set(["cat", "ls", "tail", "du", "df", "ps", "hostname", "
 
 /** Whether `file args` may run at the given access level. Returns null when fine, else the reason. */
 export function denied(access, file, args = []) {
-  if (access === "full") return null;
+  if (access === "operate") return null;
   const name = String(file);
   const first = args.find((a) => !String(a).startsWith("-"));
   if (PLAIN_READ.has(name)) return null;
@@ -84,6 +85,42 @@ export function runProgram(file, args = [], { timeout = 8000, input } = {}) {
   });
 }
 
+/* ---------------- shell commands (operate only) ---------------- */
+
+const SHELL_OUTPUT_CAP = 64 * 1024;
+
+/** Run a command line the way the console's own shell runs would, and keep it killable. */
+export function runShell(command, { timeout = 30000, onChild } = {}) {
+  return new Promise((resolve) => {
+    const limit = Math.min(Math.max(Number(timeout) || 30000, 1000), 120000);
+    const started = Date.now();
+    let child;
+    try {
+      child = spawn("/bin/sh", ["-c", String(command)], { cwd: os.homedir(), timeout: limit });
+    } catch (err) {
+      resolve({ ok: false, code: null, output: `exec error: ${err.message}`, durationMs: 0 });
+      return;
+    }
+    onChild?.(child);
+    let output = "";
+    let truncated = false;
+    const onData = (chunk) => {
+      if (truncated) return;
+      output += chunk.toString("utf8");
+      if (output.length > SHELL_OUTPUT_CAP) {
+        output = `${output.slice(0, SHELL_OUTPUT_CAP)}\n...[truncated]`;
+        truncated = true;
+      }
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+    child.on("error", (err) => resolve({ ok: false, code: null, output: `exec error: ${err.message}`, durationMs: Date.now() - started }));
+    child.on("close", (code, signal) =>
+      resolve({ ok: code === 0, code, signal, output: output.trim(), durationMs: Date.now() - started, timedOut: signal === "SIGTERM" && Date.now() - started >= limit }),
+    );
+  });
+}
+
 /* ---------------- connection ---------------- */
 
 function parseArgs(argv) {
@@ -124,6 +161,7 @@ function writeState(file, state) {
 function connect(opts, state, onClose) {
   const ws = new WebSocket(opts.server);
   let ready = false;
+  const running = new Map(); // request id -> child process, so the console can cancel (Stop)
 
   ws.addEventListener("open", () => {
     const hello = {
@@ -169,9 +207,20 @@ function connect(opts, state, onClose) {
       }
       return;
     }
+    if (msg.type === "cancel") {
+      running.get(msg.id)?.kill("SIGTERM");
+      return;
+    }
     if (msg.type === "req" && ready) {
       let res;
-      if (msg.op === "run") {
+      if (msg.op === "shell") {
+        if (opts.access !== "operate") {
+          res = { ok: false, code: null, output: "", stderr: "blocked by the agent (read-only): it was not started with --access operate" };
+        } else {
+          res = await runShell(msg.command, { timeout: msg.timeout, onChild: (child) => running.set(msg.id, child) });
+          running.delete(msg.id);
+        }
+      } else if (msg.op === "run") {
         const why = denied(opts.access, msg.file, msg.args);
         res = why ? { ok: false, code: null, stdout: "", stderr: `blocked by the agent (${opts.access}): ${why}` } : await runProgram(msg.file, msg.args, { timeout: msg.timeout, input: msg.input });
       } else {
@@ -189,14 +238,14 @@ function connect(opts, state, onClose) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || args.h) {
-    console.log("opsmira-agent --server wss://HOST/api/agent/connect --token ops_connect_... [--name web-1] [--access read-only|full] [--state FILE]");
+    console.log("opsmira-agent --server wss://HOST/api/agent/connect --token ops_connect_... [--name web-1] [--access read-only|operate] [--state FILE]");
     return;
   }
   const opts = {
     server: typeof args.server === "string" ? args.server : process.env.OPSMIRA_SERVER,
     token: typeof args.token === "string" ? args.token : process.env.OPSMIRA_TOKEN,
     name: typeof args.name === "string" ? args.name : os.hostname().toLowerCase().replace(/[^a-z0-9._-]/g, "-").slice(0, 40),
-    access: args.access === "full" ? "full" : "read-only",
+    access: args.access === "operate" || args.access === "full" ? "operate" : "read-only",
     state: typeof args.state === "string" ? args.state : join(process.env.HOME || os.homedir(), ".opsmira-agent.json"),
     stop: false,
   };
@@ -216,7 +265,7 @@ async function main() {
   if (/^ws:\/\//i.test(opts.server) && !/^ws:\/\/(localhost|127\.|\[::1\])/i.test(opts.server)) {
     log("warning: this connection is not encrypted (ws://). Put the console behind HTTPS and use wss:// so the credential is not sent in the clear.");
   }
-  if (opts.access === "full") log("access: FULL. The console can run any program as this user.");
+  if (opts.access === "operate") log("access: OPERATE. The console can run commands as this user (it asks its owner before changes).");
 
   let delay = 1000;
   const loop = () => {

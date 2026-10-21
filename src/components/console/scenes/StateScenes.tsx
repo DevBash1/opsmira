@@ -104,6 +104,9 @@ function LivePermission({
           <h2 className="font-display max-w-[760px] text-[30px] leading-[1.08] font-semibold tracking-[-1.1px] text-[var(--ink)] sm:text-[36px]">
             {proposal.title}
           </h2>
+          {proposal.server && (
+            <span className="font-code text-[11.5px] text-[var(--muted)]">Runs on {proposal.server.replace(/^agent:/, "")}, not on this server</span>
+          )}
           <p className="max-w-[720px] text-[13.5px] leading-[1.6] text-[var(--muted)]">{proposal.context}</p>
           <Panel className="flex w-full flex-col gap-[10px] p-[16px_18px]">
             <div className="flex w-full flex-row flex-wrap items-baseline justify-between gap-[8px]">
@@ -214,6 +217,9 @@ function LiveDestructive({
           <h2 className="font-display max-w-[780px] text-[30px] leading-[1.08] font-semibold tracking-[-1.1px] text-[var(--ink)] sm:text-[36px]">
             {proposal.title}
           </h2>
+          {proposal.server && (
+            <span className="font-code text-[11.5px] text-[var(--muted)]">Runs on {proposal.server.replace(/^agent:/, "")}, not on this server</span>
+          )}
           <p className="max-w-[720px] text-[13.5px] leading-[1.6] text-[var(--muted)]">{proposal.context}</p>
           <Panel className="flex w-full flex-col gap-[10px] p-[16px_18px]">
             <div className="flex w-full flex-row flex-wrap items-baseline justify-between gap-[8px]">

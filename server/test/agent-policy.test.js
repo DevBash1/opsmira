@@ -53,6 +53,6 @@ test("anything that changes the machine is refused in read-only mode", () => {
   for (const [file, args] of refused) assert.notEqual(readOnly(file, args), null, `${file} ${args.join(" ")}`);
 });
 
-test("full access allows anything", () => {
-  assert.equal(denied("full", "systemctl", ["restart", "nginx"]), null);
+test("operate access allows anything", () => {
+  assert.equal(denied("operate", "systemctl", ["restart", "nginx"]), null);
 });

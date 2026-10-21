@@ -88,3 +88,38 @@ test("a wrong credential is refused", async () => {
   const bad = startAgent(["--state", state]);
   await until(() => /refused: unknown or revoked credential/.test(bad.output()));
 });
+
+test("a read-only agent refuses shell commands; an operate agent runs them and can be stopped", async () => {
+  const { runCommand } = await import("../src/exec.js");
+  const readOnly = startAgent(["--token", agents.createPairingToken().token, "--name", "ro"]);
+  const operate = startAgent(["--token", agents.createPairingToken().token, "--name", "op", "--access", "operate"]);
+  await until(() => agents.listAgents().filter((a) => a.online).length === 2);
+  assert.equal(agents.agentAccess("ro"), "read-only");
+  assert.equal(agents.agentAccess("op"), "operate");
+
+  const refused = await runCommand("echo hi", { server: "agent:ro" });
+  assert.equal(refused.exitCode, null);
+  assert.match(refused.output, /read-only/);
+
+  const ran = await runCommand("echo hi; echo oops 1>&2; exit 3", { server: "agent:op" });
+  assert.equal(ran.exitCode, 3);
+  assert.match(ran.output, /hi/);
+  assert.match(ran.output, /oops/);
+
+  // Stop: aborting kills the remote command and answers at once.
+  const controller = new AbortController();
+  const started = Date.now();
+  const pending = runCommand("sleep 20; echo late", { server: "agent:op", signal: controller.signal });
+  setTimeout(() => controller.abort(), 300);
+  const stopped = await pending;
+  assert.equal(stopped.stopped, true);
+  assert.ok(Date.now() - started < 5000);
+
+  // The agent is still usable afterwards.
+  assert.equal((await runCommand("echo again", { server: "agent:op" })).output, "again");
+
+  const gone = await runCommand("echo x", { server: "agent:nope" });
+  assert.match(gone.output, /no connected server/);
+  readOnly.child.kill();
+  operate.child.kill();
+});

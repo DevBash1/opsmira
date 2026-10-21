@@ -12,7 +12,8 @@ proposes fixes that only run after you approve them. Self-host it on your own in
   is a *proposal* you approve or decline, and every action lands in an audit log.
 - **Live surfaces.** Memory, CPU, network, disk, processes, logs, files, containers, services, schedules,
   TLS certificates, firewall exposure and storage cleanup, read from the real machine, not mock-ups.
-- **Any server, over SSH.** The same surfaces work on another host you can already SSH into.
+- **Any server.** The same surfaces work on another host over SSH, or on one that connects itself with a
+  one-line command (no SSH, no open port), where the agent can also run commands you approve.
 - **Agent-composed views.** For data no built-in surface covers, the agent builds a view from a small
   set of blocks (stats, tables, charts, logs, key-values) and says where the data came from.
 - **Memory and artifacts.** It remembers facts about your servers and keeps notes you can reopen.

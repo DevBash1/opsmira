@@ -56,6 +56,8 @@ export interface Proposal {
   context: string;
   riskLevel: "Low" | "Medium" | "High";
   riskDetail: string;
+  /** A connected server the command runs on (agent:name); absent for the server Opsmira is on. */
+  server?: string;
   confirmPhrase?: string;
   status: "pending" | "approved" | "declined";
   result?: { exitCode: number | null; output: string; durationMs: number };
@@ -88,8 +90,8 @@ export type AgentMode = "ask" | "full";
 
 export type ChatEvent =
   | { type: "status"; text: string }
-  | { type: "tool_call"; tool: "inspect" | "act"; command: string; rejected?: string; title?: string }
-  | { type: "tool_result"; tool: "inspect" | "act"; command: string; exitCode: number | null; output: string; durationMs: number }
+  | { type: "tool_call"; tool: "inspect" | "act"; command: string; server?: string; rejected?: string; title?: string }
+  | { type: "tool_result"; tool: "inspect" | "act"; command: string; server?: string; exitCode: number | null; output: string; durationMs: number }
   | { type: "proposal"; proposal: Proposal }
   | { type: "scene"; scene: string; data?: Record<string, unknown> }
   | { type: "message"; text: string }
@@ -224,7 +226,7 @@ export const api = {
   },
   hosts: () => fetch("/api/hosts").then((r) => json<{ hosts: string[] }>(r)),
   agents: () => fetch("/api/agents").then((r) => json<{ agents: AgentInfo[] }>(r)),
-  agentToken: () => post("/api/agents/token", {}).then((r) => json<{ token: string; expiresAt: number; command: string }>(r)),
+  agentToken: () => post("/api/agents/token", {}).then((r) => json<{ token: string; expiresAt: number; command: string; manual: string }>(r)),
   removeAgent: (id: string) => fetch(`/api/agents/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers() }).then((r) => json<{ ok: true }>(r)),
   audit: () => fetch("/api/audit").then((r) => json<{ entries: AuditEntry[] }>(r)),
   models: () => fetch("/api/models").then((r) => json<{ models: ModelInfo[]; default: string }>(r)),

@@ -40,9 +40,15 @@ function conversationIdFromRequest(req) {
 }
 
 // The agent program itself. Public on purpose: it is only code. What authorizes an agent is the token.
-app.get("/agent/opsmira-agent.mjs", (req, res) => {
-  res.type("text/javascript").sendFile(env.agentFile, (err) => {
-    if (err && !res.headersSent) res.status(404).type("text").send("The agent file is not part of this install.");
+const AGENT_FILES = { "opsmira-agent.mjs": "text/javascript", "install.sh": "text/plain" };
+app.get("/agent/:file", (req, res) => {
+  const type = AGENT_FILES[req.params.file];
+  if (!type) {
+    res.status(404).type("text").send("No such file.");
+    return;
+  }
+  res.type(type).sendFile(join(env.agentDir, req.params.file), (err) => {
+    if (err && !res.headersSent) res.status(404).type("text").send("The agent is not part of this install.");
   });
 });
 
@@ -127,7 +133,9 @@ app.post("/api/agents/token", (req, res) => {
   res.json({
     token,
     expiresAt,
-    command: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs && node opsmira-agent.mjs --server ${ws} --token ${token}`,
+    // Installs a service that survives reboots, and the same thing run once by hand.
+    command: `curl -fsSL ${origin}/agent/install.sh | sudo sh -s -- --server ${ws} --token ${token}`,
+    manual: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs && node opsmira-agent.mjs --server ${ws} --token ${token}`,
   });
 });
 
@@ -343,10 +351,10 @@ app.post("/api/approve", async (req, res) => {
   let audit;
   try {
     // No abort signal: Stop never kills a change the owner approved halfway through.
-    const result = await runCommand(proposal.command);
+    const result = await runCommand(proposal.command, { server: proposal.server });
     proposal.status = "approved";
     proposal.result = result;
-    audit = appendAudit({ id: randomUUID(), kind: "act", approvalId: id, command: proposal.command, title: proposal.title, ...result });
+    audit = appendAudit({ id: randomUUID(), kind: "act", approvalId: id, command: proposal.command, title: proposal.title, ...(proposal.server ? { server: proposal.server } : {}), ...result });
 
     conversation.push({
       role: "user",

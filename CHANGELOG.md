@@ -7,7 +7,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Connect a server without SSH: `opsmira-agent` (one file, Node 22+) dials out to the console with a one-time
-  token, then answers read-only requests. Surfaces work on it as `agent:<name>`. Revoke it from the Surfaces menu.
+  token. Surfaces work on it as `agent:<name>`. Install it as a service with `agent/install.sh`, or run it once.
+  Revoke it from the Surfaces menu.
+- Commands on connected servers: with `--access operate` the AI can inspect and propose changes on an agent
+  (`server` on `inspect` and `propose_action`), with the usual approvals, audit entries and Stop.
 - CLA and sign-in workflow for outside contributions (`CLA.md` is a draft pending legal review).
 
 ## [0.1.0] - 2026-10-21

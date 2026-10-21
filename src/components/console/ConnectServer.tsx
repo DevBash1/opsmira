@@ -8,7 +8,8 @@ import { api, type AgentInfo } from "../../lib/console-api";
  */
 export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [made, setMade] = useState<{ command: string; expiresAt: number } | null>(null);
+  const [made, setMade] = useState<{ command: string; manual: string; expiresAt: number } | null>(null);
+  const [once, setOnce] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirm, setConfirm] = useState<string | null>(null);
@@ -38,6 +39,7 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
     setBusy(true);
     setError(null);
     setJoined(null);
+    setOnce(false);
     baseline.current = new Set(agents.map((a) => a.id));
     try {
       setMade(await api.agentToken());
@@ -50,7 +52,7 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
 
   const copy = () => {
     if (!made) return;
-    navigator.clipboard?.writeText(made.command).catch(() => {});
+    navigator.clipboard?.writeText(once ? made.manual : made.command).catch(() => {});
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   };
@@ -124,10 +126,12 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
             </div>
           ) : (
             <>
-              <span className="text-[11px] text-[var(--muted)]">Run this on the server (needs Node 22+). It works once and expires in an hour.</span>
+              <span className="text-[11px] text-[var(--muted)]">
+                {once ? "Run this on the server (needs Node 22+). It stays connected while it runs." : "Run this on the server as root (needs Node 22+). It installs a service that stays connected."} It works once and expires in an hour.
+              </span>
               <div className="flex flex-row items-start gap-[8px]">
                 <code className="font-code max-h-[84px] min-w-0 flex-1 overflow-auto rounded-[8px] bg-[var(--surface)] p-[8px] text-[10.5px] leading-[1.55] break-all text-[var(--ink)]">
-                  {made.command}
+                  {once ? made.manual : made.command}
                 </code>
                 <button
                   type="button"
@@ -139,8 +143,11 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
                 </button>
               </div>
               <span className="text-[10.5px] text-[var(--muted)]">
-                The agent only reads: surfaces work, nothing is changed on that server. Waiting for it to connect...
+                Read-only by default: surfaces work, nothing is changed on that server. Add <span className="font-code">--access operate</span> so the agent can run commands you approve. Waiting for it to connect...
               </span>
+              <button type="button" onClick={() => setOnce((v) => !v)} className="w-fit cursor-pointer text-[10.5px] text-[var(--muted)] underline-offset-2 hover:underline">
+                {once ? "Install it as a service instead" : "Just run it once, without installing"}
+              </button>
             </>
           )}
           <button type="button" onClick={() => {

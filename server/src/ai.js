@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { randomUUID } from "crypto";
 import { env } from "./env.js";
 import { classifyInspect, runCommand } from "./exec.js";
+import { AGENT_PREFIX, agentAccess, listAgents } from "./agents.js";
 import { appendAudit } from "./store.js";
 import { deriveScene } from "./views.js";
 import { SURFACES, SURFACE_IDS, collectSurface } from "./surfaces.js";
@@ -144,6 +145,37 @@ const SURFACE_TOOL = {
   },
 };
 
+const SERVER_PARAM =
+  "Optional. A connected server to run this on, as shown in your prompt (for example agent:web-1). Leave it out to run on the server Opsmira itself is on.";
+
+/**
+ * The connected server a call targets: { name } (or {} for this server), or { error } to hand back to the model.
+ * Commands only run on a server that is online and was started to allow commands.
+ */
+function targetServer(raw) {
+  if (raw === undefined || raw === null || raw === "") return {};
+  const host = typeof raw === "string" ? raw.trim() : "";
+  const name = host.startsWith(AGENT_PREFIX) ? host.slice(AGENT_PREFIX.length) : "";
+  const known = listAgents().map((a) => a.host);
+  if (!name || !known.includes(host)) {
+    return { error: `unknown server "${String(raw).slice(0, 60)}". Connected servers: ${known.join(", ") || "none"}. Leave server out to run on this server.` };
+  }
+  const access = agentAccess(name);
+  if (!access) return { error: `${host} is not connected right now.` };
+  if (access !== "operate") {
+    return { error: `${host} is read-only: it was started without --access operate, so commands cannot run there. Surfaces (show_surface with host: "${host}") still work. Tell the owner how to allow commands if they need it.` };
+  }
+  return { server: host };
+}
+
+/** The servers that connected themselves, for the prompt. Empty when there are none. */
+function serversNote() {
+  const agents = listAgents();
+  if (!agents.length) return "";
+  const lines = agents.map((a) => `- ${a.host}: ${a.online ? "online" : "offline"}${a.online ? (a.access === "operate" ? ", commands allowed" : ", read-only (surfaces only)") : ""}${a.hostname ? `, hostname ${a.hostname}` : ""}`);
+  return `\n\nConnected servers (besides the one you run on):\n${lines.join("\n")}\nTo read one, call show_surface with host set to its name. To run commands on one that allows commands, pass server to inspect or propose_action. Without server, commands run on this server. Never write ssh commands for these.`;
+}
+
 const TOOLS = [
   {
     type: "function",
@@ -153,7 +185,10 @@ const TOOLS = [
         "Run a read-only diagnostic shell command and return its output. Plain free, df, docker ps, ps, journalctl, tail/cat of /var/log files and ls -l are rendered as live surfaces in the console, so run them as they are, without extra piping.",
       parameters: {
         type: "object",
-        properties: { command: { type: "string", description: "The shell command to run." } },
+        properties: {
+          command: { type: "string", description: "The shell command to run." },
+          server: { type: "string", description: SERVER_PARAM },
+        },
         required: ["command"],
       },
     },
@@ -167,6 +202,7 @@ const TOOLS = [
         type: "object",
         properties: {
           command: { type: "string" },
+          server: { type: "string", description: SERVER_PARAM },
           title: { type: "string" },
           context: { type: "string", description: "Plain-language explanation of what this does and why." },
           riskLevel: { type: "string", enum: ["Low", "Medium", "High"] },
@@ -386,7 +422,7 @@ export async function runTurn(
   const artifactNote = artifacts.length
     ? `\n\nSaved artifacts (id: title). Bodies are not shown; call load_artifact to read one:\n${artifacts.map((a) => `- ${a.id}: ${a.title}`).join("\n")}`
     : "\n\nYou have no saved artifacts yet.";
-  const systemPrompt = SYSTEM_PROMPT + (fullAccess ? FULL_ACCESS_NOTE : "") + memoryNote + artifactNote;
+  const systemPrompt = SYSTEM_PROMPT + (fullAccess ? FULL_ACCESS_NOTE : "") + serversNote() + memoryNote + artifactNote;
   const messages = [{ role: "system", content: systemPrompt }, ...toModelMessages(conversation, vision)];
   let tokenCap = maxTokens();
   let creditRetry = false;
@@ -532,29 +568,33 @@ export async function runTurn(
 
       if (call.function?.name === "inspect") {
         const command = typeof parsed.command === "string" ? parsed.command.trim() : "";
+        const target = targetServer(parsed.server);
         if (!command) {
           result = { error: "invalid arguments: a non-empty command string is required." };
+        } else if (target.error) {
+          result = { error: target.error };
         } else {
           // Full access skips the read-only check: the owner allowed any command.
           const check = fullAccess ? { ok: true } : classifyInspect(command);
           if (!check.ok) {
             result = { error: `rejected: ${check.reason}. Use propose_action instead if this needs to run.` };
-            onEvent({ type: "tool_call", tool: "inspect", command, rejected: check.reason });
+            onEvent({ type: "tool_call", tool: "inspect", command, server: target.server, rejected: check.reason });
           } else {
-            onEvent({ type: "tool_call", tool: "inspect", command });
-            const run = await runCommand(command, { signal });
+            onEvent({ type: "tool_call", tool: "inspect", command, server: target.server });
+            const run = await runCommand(command, { signal, server: target.server });
             if (run.stopped) {
               // Killed by Stop: not a real result, so it isn't audited or shown as one.
-              onEvent({ type: "tool_result", tool: "inspect", command, ...run });
+              onEvent({ type: "tool_result", tool: "inspect", command, server: target.server, ...run });
               const toolMsg = { role: "tool", tool_call_id: call.id, content: JSON.stringify({ error: "stopped by the owner" }) };
               messages.push(toolMsg);
               conversation.push(toolMsg);
               return stop(calls.slice(index + 1));
             }
-            appendAudit({ id: randomUUID(), kind: "inspect", command, ...run });
+            appendAudit({ id: randomUUID(), kind: "inspect", command, ...(target.server ? { server: target.server } : {}), ...run });
             result = run;
-            onEvent({ type: "tool_result", tool: "inspect", command, ...run });
-            const derived = deriveScene(command, run);
+            onEvent({ type: "tool_result", tool: "inspect", command, server: target.server, ...run });
+            // Cards are built from this server's own readings, so output from another server never becomes one.
+            const derived = target.server ? null : deriveScene(command, run);
             if (derived) {
               sceneShown = true;
               view = { scene: derived.scene, data: derived.data };
@@ -677,15 +717,18 @@ export async function runTurn(
         }
       } else if (call.function?.name === "propose_action") {
         const command = typeof parsed.command === "string" ? parsed.command.trim() : "";
+        const target = targetServer(parsed.server);
         if (!command || typeof parsed.title !== "string" || !parsed.title.trim()) {
           result = { error: "invalid arguments: command and title are required." };
+        } else if (target.error) {
+          result = { error: target.error };
         } else if (fullAccess) {
           // Pre-authorised by the owner's mode: runs now, no card. Stop ends it like Ctrl-C would, so the
           // owner is never stuck waiting on a command they chose to cancel.
-          onEvent({ type: "tool_call", tool: "act", command, title: parsed.title });
-          const run = await runCommand(command, { signal });
-          appendAudit({ id: randomUUID(), kind: "act", auto: true, command, title: parsed.title, ...run });
-          onEvent({ type: "tool_result", tool: "act", command, ...run });
+          onEvent({ type: "tool_call", tool: "act", command, server: target.server, title: parsed.title });
+          const run = await runCommand(command, { signal, server: target.server });
+          appendAudit({ id: randomUUID(), kind: "act", auto: true, command, title: parsed.title, ...(target.server ? { server: target.server } : {}), ...run });
+          onEvent({ type: "tool_result", tool: "act", command, server: target.server, ...run });
           if (run.stopped) {
             const toolMsg = {
               role: "tool",
@@ -702,6 +745,7 @@ export async function runTurn(
           const proposal = {
             id,
             command,
+            ...(target.server ? { server: target.server } : {}),
             title: noDashes(parsed.title),
             context: typeof parsed.context === "string" ? noDashes(parsed.context) : "",
             riskLevel: ["Low", "Medium", "High"].includes(parsed.riskLevel) ? parsed.riskLevel : "Medium",

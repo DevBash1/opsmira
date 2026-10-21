@@ -43,6 +43,8 @@ type ToolCall = {
   /** "act": a change run without an approval card (Full access mode). */
   kind: "inspect" | "act";
   command: string;
+  /** A connected server it ran on (agent:name). */
+  server?: string;
   title?: string;
   output?: string;
   exitCode?: number | null;
@@ -133,7 +135,7 @@ function applyEvent(turn: Turn, event: ChatEvent): Turn {
       ...turn,
       tools: [
         ...turn.tools,
-        { id: nextId(), kind: event.tool, command: event.command, title: event.title, pending: !event.rejected, rejected: event.rejected },
+        { id: nextId(), kind: event.tool, command: event.command, server: event.server, title: event.title, pending: !event.rejected, rejected: event.rejected },
       ],
     };
   }
@@ -319,6 +321,9 @@ function ToolActivityLine({ tool, open, onToggle }: { tool: ToolCall; open: bool
             />
           )}
         </span>
+        {tool.server && (
+          <span className="font-code shrink-0 rounded-full bg-[var(--soft)] px-[7px] py-[1px] text-[10px] text-[var(--accent-strong)]">{tool.server.replace(/^agent:/, "")}</span>
+        )}
         <span className="font-code min-w-0 truncate text-[12px] text-[var(--ink)]">{trimCommand(tool.command)}</span>
         {tool.kind === "act" && (
           <span className="font-code shrink-0 rounded-full bg-[color-mix(in_oklab,var(--danger)_14%,transparent)] px-[6px] py-[1px] text-[9px] tracking-[0.5px] text-[var(--danger)]">

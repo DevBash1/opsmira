@@ -107,18 +107,52 @@ export function revokeAgent(id) {
 }
 
 /** Ask a connected agent to do something. Resolves with its answer, or { ok:false } if it can't. */
-export function callAgent(id, op, params = {}, timeoutMs = 15_000) {
+export function callAgent(id, op, params = {}, timeoutMs = 15_000, { signal } = {}) {
   const conn = live.get(id);
   if (!conn || conn.ws.readyState !== 1) return Promise.resolve({ ok: false, code: null, stdout: "", stderr: "agent offline" });
   return new Promise((resolve) => {
     const requestId = randomUUID();
-    const timer = setTimeout(() => {
+    const finish = (result) => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
       conn.pending.delete(requestId);
-      resolve({ ok: false, code: null, stdout: "", stderr: "agent did not answer in time" });
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      // Stop what it was doing, then give up waiting.
+      if (conn.ws.readyState === 1) conn.ws.send(JSON.stringify({ type: "cancel", id: requestId }));
+      finish({ ok: false, code: null, stdout: "", stderr: "agent did not answer in time" });
     }, timeoutMs);
-    conn.pending.set(requestId, { resolve, timer });
+    // The owner pressed Stop: tell the agent to kill it and answer right away.
+    const onAbort = () => {
+      if (conn.ws.readyState === 1) conn.ws.send(JSON.stringify({ type: "cancel", id: requestId }));
+      finish({ ok: false, code: null, stdout: "", stderr: "stopped", stopped: true });
+    };
+    if (signal?.aborted) return onAbort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    conn.pending.set(requestId, { resolve: finish, timer });
     conn.ws.send(JSON.stringify({ type: "req", id: requestId, op, ...params }));
   });
+}
+
+/** Run a shell command line on a connected server. Same result shape as exec.js's runCommand. */
+export async function runOnAgent(name, command, { signal } = {}) {
+  const agent = agentByName(name);
+  const started = Date.now();
+  const fail = (output) => ({ exitCode: null, output, durationMs: Date.now() - started });
+  if (!agent) return fail(`exec error: no connected server named ${name}`);
+  if (!live.has(agent.id)) return fail(`exec error: ${name} is not connected right now`);
+  const r = await callAgent(agent.id, "shell", { command, timeout: 30_000 }, 40_000, { signal });
+  if (r.stopped) return { exitCode: null, output: "", durationMs: Date.now() - started, stopped: true };
+  // Refused or never ran (no exit code): say why, rather than returning an empty result.
+  if (r.output === undefined || (r.code === null && !r.output && r.stderr)) return fail(`exec error: ${r.stderr || "no answer"}`);
+  return { exitCode: r.code, signal: r.signal ?? null, output: r.output, durationMs: r.durationMs ?? Date.now() - started, timedOut: !!r.timedOut };
+}
+
+/** "read-only" or "operate" for an agent that is connected now, else null. */
+export function agentAccess(name) {
+  const agent = agentByName(name);
+  return agent && live.has(agent.id) ? live.get(agent.id).info?.access ?? "read-only" : null;
 }
 
 export const isOnline = (id) => live.has(id);
@@ -162,7 +196,7 @@ export function attachAgentGateway(server) {
           hostname: String(msg.info?.hostname ?? "").slice(0, 80),
           platform: String(msg.info?.platform ?? "").slice(0, 80),
           agent: String(msg.info?.agent ?? "").slice(0, 20),
-          access: msg.info?.access === "full" ? "full" : "read-only",
+          access: msg.info?.access === "operate" ? "operate" : "read-only",
         };
         let credential = null;
         if (typeof msg.credential === "string" && msg.credential) {
@@ -200,6 +234,7 @@ export function attachAgentGateway(server) {
           code: Number.isInteger(msg.code) ? msg.code : null,
           stdout: typeof msg.stdout === "string" ? msg.stdout : "",
           stderr: typeof msg.stderr === "string" ? msg.stderr : "",
+          ...(typeof msg.output === "string" ? { output: msg.output, signal: msg.signal ?? null, durationMs: Number(msg.durationMs) || 0, timedOut: !!msg.timedOut } : {}),
         });
       }
     });

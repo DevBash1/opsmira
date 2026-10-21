@@ -109,8 +109,10 @@ infrastructure). The AGPL repository never needs billing code in it.
 
 A first slice of Phase 3 exists in the self-hosted app: `agent/opsmira-agent.mjs`, the gateway in
 `server/src/agents.js` (pairing, credentials, revoke, heartbeat), and `agentMachine` in `machine.js`. All
-surfaces work through it with no change to collectors or the UI. Not built yet: the install script and
-service, running approved changes through an agent, and an agent-side policy file.
+surfaces work through it with no change to collectors or the UI. It also runs commands: `inspect` and approved
+`propose_action` take a `server`, `agent:` servers started with `--access operate` run them, and Stop cancels the
+remote process. `agent/install.sh` installs it as a systemd service. Not built yet: an agent-side policy file
+(allowed commands the owner controls), agent self-update, and testing the installer on a real systemd host.
 
 ## Phases
 

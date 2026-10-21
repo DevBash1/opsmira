@@ -62,12 +62,12 @@ export function buildLastTurn(conversation, proposals) {
         if (typeof result.error === "string") {
           if (result.error.startsWith("rejected:")) {
             const reason = result.error.replace(/^rejected:\s*/, "").replace(/\.\s*Use propose_action.*$/, "");
-            turn.tools.push({ kind: "inspect", command, rejected: reason });
+            turn.tools.push({ kind: "inspect", command, server: args.server || undefined, rejected: reason });
           }
           continue;
         }
-        turn.tools.push({ kind: "inspect", command, output: result.output, exitCode: result.exitCode ?? null });
-        const shown = m.view ?? deriveScene(command, result);
+        turn.tools.push({ kind: "inspect", command, server: args.server || undefined, output: result.output, exitCode: result.exitCode ?? null });
+        const shown = m.view ?? (args.server ? null : deriveScene(command, result));
         if (shown) turn.scene = { scene: shown.scene, data: shown.data };
       } else if (name === "show_surface" || name === "show_view") {
         // Only what the console really showed (kept with the message). Chats saved before surfaces
@@ -78,7 +78,7 @@ export function buildLastTurn(conversation, proposals) {
           const proposal = proposals.get(result.id);
           if (proposal) turn.proposals.push(proposal);
         } else if (result.status === "executed") {
-          turn.tools.push({ kind: "act", command: String(args.command ?? ""), title: args.title, output: result.output, exitCode: result.exitCode ?? null });
+          turn.tools.push({ kind: "act", command: String(args.command ?? ""), server: args.server || undefined, title: args.title, output: result.output, exitCode: result.exitCode ?? null });
         }
       } else if (name === "suggest_next") {
         if (result.status === "shown") turn.suggestions = cleanSuggestions(args.suggestions);

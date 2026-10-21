@@ -77,18 +77,24 @@ over SSH. Requirements:
 
 ## Connect a server without SSH (agent)
 
-Open **Surfaces**, choose **Connect a server**, and run the command it shows on the server (Node 22+). The
-agent dials out to the console, so the server needs no open port and you hand over no key.
+Open **Surfaces**, choose **Connect a server**, and run the command it shows on the server (Node 22+, as root).
+It installs `opsmira-agent` as a systemd service that dials out to the console, so the server needs no open
+port and you hand over no key. Prefer not to install anything? The panel also has a "just run it once" command.
 
-- The command contains a one-time token that expires in an hour. After pairing, the agent keeps a long-lived
-  credential in `~/.opsmira-agent.json` (mode 0600); the console stores only a hash of it.
-- It reconnects by itself. **Remove** in the Surfaces menu revokes it at once and the agent stops.
-- Read-only by default: the agent runs only the read-only programs the surfaces use (`--access full` lifts that
-  limit on the agent; changes through agents are not wired up yet). It runs as the user that started it, so run
-  it as an unprivileged user.
-- Use HTTPS (`wss://`). Over plain `ws://` the credential crosses the network unencrypted; the agent warns you.
-- Run it as a service so it survives reboots, for example a systemd unit that runs
-  `node /opt/opsmira-agent/opsmira-agent.mjs --server wss://... --state /var/lib/opsmira-agent/state.json`.
+- **Pairing:** the command carries a one-time token that expires in an hour. After pairing, the agent keeps a
+  long-lived credential in its state file (mode 0600); the console stores only a hash of it.
+- **Reconnects** by itself. **Remove** in the Surfaces menu revokes it at once and the agent stops.
+- **Read-only by default.** The agent runs only the read-only programs the surfaces use, so surfaces work and
+  nothing can change. Add `--access operate` to the command to let the console run shell commands there: the
+  AI can then `inspect` it, and propose changes that wait for your approval exactly as on this server. Proposal
+  cards and activity lines show which server a command targets.
+- **Runs as an unprivileged user** (`opsmira-agent`, created for you; `--run-as USER` to change it). An
+  `operate` agent can do what that user can do, so give the account only the access you want it to have.
+- **Use HTTPS (`wss://`).** Over plain `ws://` the credential crosses the network unencrypted; the installer
+  and the agent both warn.
+- **Remove it:** `curl -fsSL https://CONSOLE/agent/install.sh | sudo sh -s -- --uninstall`, then Remove in the console.
+- Trust: the agent obeys the console it paired with. Anyone who controls the console can use an `operate`
+  agent's account, so protect the console like an SSH key.
 
 ## Settings
 

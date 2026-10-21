@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import { homedir } from "os";
+import { AGENT_PREFIX, runOnAgent } from "./agents.js";
 
 // Commands whose first word may run unattended under `inspect`. Read-only by
 // convention — anything that mutates state belongs behind propose_action.
@@ -101,7 +102,9 @@ const TIMEOUT_MS = 30_000;
  * Run a shell command with a hard timeout, output cap, and a stripped env.
  * An optional AbortSignal (the owner pressing Stop) kills it; the result is then marked `stopped`.
  */
-export function runCommand(command, { signal } = {}) {
+export function runCommand(command, { signal, server } = {}) {
+  // A server that connected itself runs it there; nothing else changes for the caller.
+  if (typeof server === "string" && server.startsWith(AGENT_PREFIX)) return runOnAgent(server.slice(AGENT_PREFIX.length), command, { signal });
   return new Promise((resolve) => {
     const safeEnv = { ...process.env };
     for (const key of Object.keys(safeEnv)) {
