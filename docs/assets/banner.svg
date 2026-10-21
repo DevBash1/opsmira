@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="1280" height="360" role="img" aria-label="Opsmira: your server, in plain words">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0d1513"/>
+      <stop offset="1" stop-color="#16251f"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="8" y1="4" x2="58" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4aae7c"/>
+      <stop offset="1" stop-color="#1f7f86"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="1080" cy="40" r="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4aae7c" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#4aae7c" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="120" cy="360" r="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1f7f86" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#1f7f86" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="360" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="360" rx="24" fill="url(#glowA)"/>
+  <rect width="1280" height="360" rx="24" fill="url(#glowB)"/>
+  <rect x="0.5" y="0.5" width="1279" height="359" rx="23.5" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
+
+  <g transform="translate(96 88) scale(2.2)">
+    <rect width="64" height="64" rx="15" fill="url(#mark)"/>
+    <path d="M50 32A18 18 0 1 1 32 14" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="44.7" cy="19.3" r="5.4" fill="#d9fbe9"/>
+  </g>
+
+  <g font-family="'Space Grotesk','Inter','Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif">
+    <text x="272" y="170" font-size="84" font-weight="700" fill="#f2f6f4" letter-spacing="-2">Opsmira</text>
+    <text x="276" y="222" font-size="30" font-weight="500" fill="#9fd9bb">Your server, in plain words.</text>
+    <text x="276" y="266" font-size="20" fill="#9bb0a8">An AI operator console that inspects, shows what it found, and asks before it changes anything.</text>
+  </g>
+</svg>
