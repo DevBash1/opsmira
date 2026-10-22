@@ -127,7 +127,7 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
           ) : (
             <>
               <span className="text-[11px] text-[var(--muted)]">
-                {once ? "Run this on the server (needs Node 22+). It stays connected while it runs." : "Run this on the server as root (needs Node 22+). It installs a service that stays connected."} It works once and expires in an hour.
+                {once ? "Run this on the server (needs Node 22+). It stays connected while it runs." : "Run this on the server as root. It installs a service that stays connected, and downloads Node 22 for the agent only if the server has none."} It works once and expires in an hour.
               </span>
               <div className="flex flex-row items-start gap-[8px]">
                 <code className="font-code max-h-[84px] min-w-0 flex-1 overflow-auto rounded-[8px] bg-[var(--surface)] p-[8px] text-[10.5px] leading-[1.55] break-all text-[var(--ink)]">

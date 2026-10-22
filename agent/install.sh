@@ -9,11 +9,14 @@
 #   --name NAME      how the server is named in the console (default: this hostname)
 #   --access MODE    read-only (default) or operate (lets the console run commands here)
 #   --run-as USER    the account the agent runs as (default: opsmira-agent, created if missing)
+#   --install-node   if this machine has no Node 22+, download one for the agent only (checksum verified,
+#                    kept in /opt/opsmira-agent/node, the system Node is left alone)
+#   --node PATH      run the agent with this Node 22+ binary
 #   --dry-run        print what would be done and change nothing
 #   --uninstall      stop and remove the service (the console entry is removed in its Surfaces menu)
 set -eu
 
-SERVER="" TOKEN="" NAME="" ACCESS="read-only" RUN_AS="opsmira-agent" DRY=0 UNINSTALL=0
+SERVER="" TOKEN="" NAME="" ACCESS="read-only" RUN_AS="opsmira-agent" DRY=0 UNINSTALL=0 INSTALL_NODE=0 NODE_BIN=""
 DIR=/opt/opsmira-agent
 STATE_DIR=/var/lib/opsmira-agent
 ENV_FILE=/etc/opsmira-agent.env
@@ -30,6 +33,8 @@ while [ $# -gt 0 ]; do
     --name) NAME="${2:-}"; shift 2 ;;
     --access) ACCESS="${2:-}"; shift 2 ;;
     --run-as) RUN_AS="${2:-}"; shift 2 ;;
+    --install-node) INSTALL_NODE=1; shift ;;
+    --node) NODE_BIN="${2:-}"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     -h|--help) sed -n '2,15p' "$0" 2>/dev/null || true; exit 0 ;;
@@ -53,8 +58,18 @@ case "$ACCESS" in read-only|operate) ;; *) die "--access must be read-only or op
 case "$RUN_AS" in *[!a-zA-Z0-9._-]*|"") die "--run-as has characters that are not allowed" ;; esac
 [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || die "run as root (sudo), or add --dry-run to see the steps"
 command -v systemctl >/dev/null 2>&1 || die "this needs systemd. Run the agent by hand instead: node opsmira-agent.mjs --server ... --token ..."
-command -v node >/dev/null 2>&1 || die "Node 22 or newer is required. Install it first (https://nodejs.org)."
-[ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ] || die "Node 22 or newer is required (found $(node -v))."
+node_ok() { [ -x "$1" ] && [ "$("$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)" -ge 22 ]; }
+NEED_NODE=0
+if [ -n "$NODE_BIN" ]; then
+  node_ok "$NODE_BIN" || die "$NODE_BIN is not Node 22 or newer"
+elif command -v node >/dev/null 2>&1 && node_ok "$(command -v node)"; then
+  NODE_BIN=$(command -v node)
+elif [ "$INSTALL_NODE" = 1 ]; then
+  NEED_NODE=1
+  NODE_BIN="$DIR/node/bin/node"
+else
+  die "Node 22 or newer is required (found: $(node -v 2>/dev/null || echo none)). Install it, or add --install-node to download one for the agent only."
+fi
 command -v curl >/dev/null 2>&1 || die "curl is required"
 
 # Where to fetch the agent: the same origin as the console.
@@ -68,6 +83,26 @@ if [ "$DRY" = 1 ] || ! id "$RUN_AS" >/dev/null 2>&1; then
   run useradd --system --home-dir "$STATE_DIR" --shell /usr/sbin/nologin "$RUN_AS"
 fi
 run mkdir -p "$DIR" "$STATE_DIR"
+if [ "$NEED_NODE" = 1 ]; then
+  if [ "$DRY" = 1 ]; then
+    say "+ download Node 22 (checksum verified) into $DIR/node"
+  else
+    case "$(uname -m)" in x86_64) NARCH=x64 ;; aarch64|arm64) NARCH=arm64 ;; armv7l) NARCH=armv7l ;; *) die "no Node download for $(uname -m); install Node 22 and use --node" ;; esac
+    command -v xz >/dev/null 2>&1 || die "xz is needed to unpack Node (apt install xz-utils)"
+    NBASE=https://nodejs.org/dist/latest-v22.x
+    SUMS=$(curl -fsSL "$NBASE/SHASUMS256.txt") || die "could not reach nodejs.org"
+    NFILE=$(printf '%s\n' "$SUMS" | awk -v a="linux-$NARCH.tar.xz" '$2 ~ a"$" { print $2; exit }')
+    [ -n "$NFILE" ] || die "no Node 22 build for $NARCH"
+    NSUM=$(printf '%s\n' "$SUMS" | awk -v f="$NFILE" '$2 == f { print $1 }')
+    NTMP=$(mktemp -d)
+    curl -fsSL "$NBASE/$NFILE" -o "$NTMP/$NFILE" || die "could not download $NFILE"
+    [ "$(sha256sum "$NTMP/$NFILE" | cut -d' ' -f1)" = "$NSUM" ] || die "Node download failed its checksum"
+    rm -rf "$DIR/node"; mkdir -p "$DIR/node"
+    tar -xJf "$NTMP/$NFILE" -C "$DIR/node" --strip-components=1
+    rm -rf "$NTMP"
+    say "Installed $("$NODE_BIN" -v) for the agent in $DIR/node (the system Node is untouched)."
+  fi
+fi
 run curl -fsSL "$ORIGIN/agent/opsmira-agent.mjs" -o "$DIR/opsmira-agent.mjs"
 run chown -R "$RUN_AS" "$STATE_DIR"
 
@@ -94,7 +129,7 @@ Wants=network-online.target
 User=$RUN_AS
 EnvironmentFile=$ENV_FILE
 Environment=HOME=$STATE_DIR
-ExecStart=$(command -v node) $DIR/opsmira-agent.mjs --name $NAME --access $ACCESS --state $STATE_DIR/state.json
+ExecStart=$NODE_BIN $DIR/opsmira-agent.mjs --name $NAME --access $ACCESS --state $STATE_DIR/state.json
 Restart=always
 RestartSec=3
 $HARDEN

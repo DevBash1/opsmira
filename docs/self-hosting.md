@@ -89,7 +89,7 @@ over SSH. Requirements:
 
 ## Connect a server without SSH (agent)
 
-Open **Surfaces**, choose **Connect a server**, and run the command it shows on the server (Node 22+, as root).
+Open **Surfaces**, choose **Connect a server**, and run the command it shows on the server (as root). The agent needs Node 22+; if the server has an older one the command downloads a private Node 22 for the agent (`--install-node`) and leaves the system Node alone.
 It installs `opsmira-agent` as a systemd service that dials out to the console, so the server needs no open
 port and you hand over no key. Prefer not to install anything? The panel also has a "just run it once" command.
 

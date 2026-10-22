@@ -147,7 +147,7 @@ app.post("/api/agents/token", (req, res) => {
     token,
     expiresAt,
     // Installs a service that survives reboots, and the same thing run once by hand.
-    command: `curl -fsSL ${origin}/agent/install.sh | sudo sh -s -- --server ${ws} --token ${token}`,
+    command: `curl -fsSL ${origin}/agent/install.sh | sudo sh -s -- --server ${ws} --token ${token} --install-node`,
     manual: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs && node opsmira-agent.mjs --server ${ws} --token ${token}`,
   });
 });
