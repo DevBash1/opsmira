@@ -14,8 +14,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   blocked for 10 minutes after 5 failed attempts.
 
 ### Added
-- Reasoning models: their thinking shows as a quiet "Thought" line above what they did, collapsed until opened,
-  and is kept with the chat.
+- Reasoning models: their thinking streams live as one line (a brain icon and the latest words) above what they
+  did, and opens to the full text. It shares one open slot with command output, and is kept with the chat.
 - Connect a server without SSH: `opsmira-agent` (one file, Node 22+) dials out to the console with a one-time
   token. Surfaces work on it as `agent:<name>`. Install it as a service with `agent/install.sh`, or run it once.
   Revoke it from the Surfaces menu.

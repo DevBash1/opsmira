@@ -97,6 +97,8 @@ export type ChatEvent =
   | { type: "message"; text: string }
   /** What a reasoning model thought before it acted or answered. */
   | { type: "thinking"; text: string }
+  /** The current step of thinking is complete. */
+  | { type: "thinking_end" }
   | { type: "error"; text: string; code?: string }
   /** Tappable follow-up actions the agent offers under its reply. */
   | { type: "suggestions"; items: string[] }

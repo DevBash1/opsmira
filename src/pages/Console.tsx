@@ -67,6 +67,8 @@ type Turn = {
   images: string[];
   /** What a reasoning model thought, one entry per step. */
   thoughts: string[];
+  /** A thought is still being written (streamed). */
+  thinking?: boolean;
   tools: ToolCall[];
   proposals: Proposal[];
   /** Assistant messages in arrival order: a turn can gain one after an approval. */
@@ -151,7 +153,12 @@ function applyEvent(turn: Turn, event: ChatEvent): Turn {
     tools[realIdx] = { ...tools[realIdx], output: event.output, exitCode: event.exitCode, pending: false };
     return { ...turn, tools };
   }
-  if (event.type === "thinking") return { ...turn, thoughts: [...turn.thoughts, event.text] };
+  if (event.type === "thinking") {
+    // Words of a step still being written join that step; otherwise a new step starts.
+    if (turn.thinking && turn.thoughts.length) return { ...turn, thoughts: [...turn.thoughts.slice(0, -1), turn.thoughts[turn.thoughts.length - 1] + event.text] };
+    return { ...turn, thoughts: [...turn.thoughts, event.text], thinking: true };
+  }
+  if (event.type === "thinking_end") return { ...turn, thinking: false };
   if (event.type === "proposal") return { ...turn, proposals: [...turn.proposals, event.proposal] };
   if (event.type === "scene") return { ...turn, scene: { scene: event.scene, data: event.data } };
   if (event.type === "message") return { ...turn, replies: [...turn.replies, event.text] };
@@ -167,6 +174,7 @@ function applyEvent(turn: Turn, event: ChatEvent): Turn {
     return {
       ...turn,
       stopped: true,
+      thinking: false,
       tools: turn.tools.map((t) => (t.pending ? { ...t, pending: false } : t)),
       steers: turn.steers.map((s) => (s.state === "queued" && (!s.id || dropped.has(s.id)) ? { ...s, state: "dropped" } : s)),
     };
@@ -381,7 +389,7 @@ function ToolActivityLine({ tool, open, onToggle }: { tool: ToolCall; open: bool
       <AnimatePresence initial={false}>
         {hasOutput && open && (
           <motion.div key="output" {...collapseY(reduce)} className="w-full">
-            <pre className="theme-dark font-code mt-[6px] max-h-[220px] w-full overflow-auto rounded-[10px] bg-[var(--surface)] p-[12px_14px] text-[11px]/[18px] whitespace-pre-wrap text-[var(--ink)] [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]">
+            <pre className="theme-dark font-code mt-[6px] max-h-[220px] w-full overflow-x-hidden overflow-y-auto rounded-[10px] [overflow-wrap:anywhere] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-[var(--surface)] p-[12px_14px] text-[11px]/[18px] whitespace-pre-wrap text-[var(--ink)] [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]">
               {trimmed ? `$ ${tool.command}\n\n${tool.output}` : tool.output}
             </pre>
           </motion.div>
@@ -391,27 +399,49 @@ function ToolActivityLine({ tool, open, onToggle }: { tool: ToolCall; open: bool
   );
 }
 
-/** A reasoning model's thinking: one quiet line, open it to read. */
-function ThoughtLine({ thoughts }: { thoughts: string[] }) {
-  const [open, setOpen] = useState(false);
+/** The last non-empty line of the thinking, trimmed to what fits on one line. */
+function lastThoughtLine(text: string): string {
+  const line = text.split("\n").map((l) => l.trim()).filter(Boolean).at(-1) ?? "";
+  return line.length > 100 ? `…${line.slice(-100)}` : line;
+}
+
+/** A reasoning model's thinking: one quiet line that follows it live, and opens to the whole text. */
+function ThoughtLine({ thoughts, live, open, onToggle }: { thoughts: string[]; live: boolean; open: boolean; onToggle: () => void }) {
   const reduce = useReducedMotion();
+  const text = thoughts.join("\n\n").replace(/\*\*/g, "");
+  const preview = lastThoughtLine(thoughts.at(-1)?.replace(/\*\*/g, "") ?? "");
+  const body = useRef<HTMLDivElement>(null);
+
+  // While it is still thinking and open, keep the newest words in view.
+  useEffect(() => {
+    if (live && open && body.current) body.current.scrollTop = body.current.scrollHeight;
+  }, [text, live, open]);
+
   return (
     <div className="flex w-full flex-col items-start">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={onToggle}
         aria-expanded={open}
-        className="group flex w-fit cursor-pointer flex-row items-center gap-[6px] rounded-full py-[2px] pr-[6px] text-[12px] text-[var(--muted)] transition-colors duration-200 ease-enter hover:text-[var(--ink)]"
+        aria-label={open ? "Hide thinking" : "Show thinking"}
+        className="flex w-full min-w-0 cursor-pointer flex-row items-center gap-[7px] rounded-full py-[2px] text-left text-[12px] text-[var(--muted)] transition-colors duration-200 ease-enter hover:text-[var(--ink)]"
       >
-        <Icon name="sparkles" className="h-[12px] w-[12px] shrink-0 text-[var(--accent-2)]" />
-        <span>{thoughts.length > 1 ? `Thought · ${thoughts.length} steps` : "Thought"}</span>
+        <Icon name="brain" className={`h-[13px] w-[13px] shrink-0 text-[var(--accent-2)] ${live ? "motion-safe:animate-pulse" : ""}`} />
+        {open ? (
+          <span>{thoughts.length > 1 ? `Thought · ${thoughts.length} steps` : "Thought"}</span>
+        ) : (
+          <span className="min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,#000_calc(100%-40px),transparent)]">{preview || "Thinking"}</span>
+        )}
         <Icon name="arrow-up" className={`h-[9px] w-[9px] shrink-0 transition-transform duration-300 ease-move ${open ? "rotate-0" : "rotate-180"}`} />
       </button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div key="thought" {...collapseY(reduce)} className="w-full">
-            <div className="mt-[4px] max-h-[220px] w-full overflow-x-hidden overflow-y-auto pl-[18px] text-[12.5px]/[20px] [overflow-wrap:anywhere] whitespace-pre-wrap text-[var(--muted)] [scrollbar-width:none] [mask-image:linear-gradient(to_bottom,transparent,#000_10px,#000_calc(100%-32px),transparent)] [&::-webkit-scrollbar]:hidden">
-              {thoughts.join("\n\n")}
+            <div
+              ref={body}
+              className="mt-[4px] max-h-[220px] w-full overflow-x-hidden overflow-y-auto pl-[20px] text-[12.5px]/[20px] [overflow-wrap:anywhere] whitespace-pre-wrap text-[var(--muted)] [scrollbar-width:none] [mask-image:linear-gradient(to_bottom,transparent,#000_10px,#000_calc(100%-32px),transparent)] [&::-webkit-scrollbar]:hidden"
+            >
+              {text}
             </div>
           </motion.div>
         )}
@@ -423,10 +453,8 @@ function ThoughtLine({ thoughts }: { thoughts: string[] }) {
 const VISIBLE_TOOLS = 3;
 
 /** The last three commands stay in view; older ones slide up into the "+N earlier" counter. */
-function ToolActivityList({ tools }: { tools: ToolCall[] }) {
+function ToolActivityList({ tools, openId, setOpenId }: { tools: ToolCall[]; openId: string | null; setOpenId: (id: string | null) => void }) {
   const [expanded, setExpanded] = useState(false);
-  // One output open at a time: opening another closes the one before it.
-  const [openId, setOpenId] = useState<string | null>(null);
   const reduce = useReducedMotion();
   const hidden = Math.max(0, tools.length - VISIBLE_TOOLS);
   const visible = expanded ? tools : tools.slice(-VISIBLE_TOOLS);
@@ -461,7 +489,7 @@ function ToolActivityList({ tools }: { tools: ToolCall[] }) {
         {visible.map((t) => (
           <motion.div key={t.id} {...collapseY(reduce, { blur: true })} className="w-full">
             <div className="pb-[8px]">
-              <ToolActivityLine tool={t} open={openId === t.id} onToggle={() => setOpenId((id) => (id === t.id ? null : t.id))} />
+              <ToolActivityLine tool={t} open={openId === t.id} onToggle={() => setOpenId(openId === t.id ? null : t.id)} />
             </div>
           </motion.div>
         ))}
@@ -555,6 +583,9 @@ function TurnBlock({
   onAsk?: (prompt: string) => void;
   onOpenArtifact?: (id: string) => void;
 }) {
+  // The thinking and one command's output share a single open slot: opening one closes the other.
+  const [openPanel, setOpenPanel] = useState<string | null>(null);
+
   return (
     <div className="flex w-full shrink-0 flex-col items-start gap-[16px] p-[20px_0px]">
       {(turn.ask || turn.images.length > 0) && <AskLine text={turn.ask} images={turn.images} />}
@@ -566,13 +597,13 @@ function TurnBlock({
 
       {turn.thoughts.length > 0 && (
         <div style={{ animationDelay: "30ms" }} className="w-full motion-safe:animate-blur-rise">
-          <ThoughtLine thoughts={turn.thoughts} />
+          <ThoughtLine thoughts={turn.thoughts} live={!!turn.thinking} open={openPanel === "thought"} onToggle={() => setOpenPanel(openPanel === "thought" ? null : "thought")} />
         </div>
       )}
 
       {turn.tools.length > 0 && (
         <div style={{ animationDelay: "50ms" }} className="w-full motion-safe:animate-blur-rise">
-          <ToolActivityList tools={turn.tools} />
+          <ToolActivityList tools={turn.tools} openId={openPanel === "thought" ? null : openPanel} setOpenId={setOpenPanel} />
         </div>
       )}
 

@@ -11,6 +11,28 @@ import "./setup.js";
 
 const MARKUP = '<｜DSML｜tool_calls>\n<｜DSML｜invoke name="inspect">\n<｜DSML｜parameter name="command" string="true">hostname</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜tool_calls>';
 let mode = "stop";
+/** Answer like an OpenAI-compatible endpoint: as one JSON body, or as a stream of small chunks. */
+function respond(res, j, message, finish) {
+  if (!j.stream) {
+    res.setHeader("content-type", "application/json");
+    return res.end(JSON.stringify({ id: "x", object: "chat.completion", created: 1, model: "fake", choices: [{ index: 0, message, finish_reason: finish }] }));
+  }
+  res.setHeader("content-type", "text/event-stream");
+  const send = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ id: "x", object: "chat.completion.chunk", created: 1, model: "fake", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+  if (message.reasoning) {
+    const mid = Math.ceil(message.reasoning.length / 2);
+    send({ reasoning: message.reasoning.slice(0, mid) });
+    send({ reasoning: message.reasoning.slice(mid) });
+  }
+  if (message.content) send({ content: message.content.slice(0, 20) }), send({ content: message.content.slice(20) });
+  for (const [index, call] of (message.tool_calls ?? []).entries()) {
+    send({ tool_calls: [{ index, id: call.id, type: "function", function: { name: call.function.name, arguments: "" } }] });
+    send({ tool_calls: [{ index, function: { arguments: call.function.arguments } }] });
+  }
+  send({}, finish);
+  res.end("data: [DONE]\n\n");
+}
+
 const fake = http.createServer((req, res) => {
   let body = "";
   req.on("data", (c) => (body += c));
@@ -22,8 +44,7 @@ const fake = http.createServer((req, res) => {
     let finish = "stop";
     if (mode === "reasoning" && Number(j.max_tokens) < 4000) {
       // Like a reasoning model whose thinking used the whole budget: no content, no tool call.
-      res.setHeader("content-type", "application/json");
-      return res.end(JSON.stringify({ id: "x", object: "chat.completion", created: 1, model: "fake", choices: [{ index: 0, message: { role: "assistant", content: null, reasoning: "thinking..." }, finish_reason: "length" }] }));
+      return respond(res, j, { role: "assistant", content: null, reasoning: "thinking..." }, "length");
     }
     if (!answered) {
       if (mode === "think") Object.assign(message, { content: MARKUP, reasoning: "**Plan** Check the hostname first." });
@@ -31,8 +52,7 @@ const fake = http.createServer((req, res) => {
       else if (mode === "late") [message.content, finish] = ["Checking.", "length"];
       else message.content = MARKUP;
     }
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ id: "x", object: "chat.completion", created: 1, model: "fake", choices: [{ index: 0, message, finish_reason: finish }] }));
+    respond(res, j, message, finish);
   });
 });
 await new Promise((r) => fake.listen(0, "127.0.0.1", r));
@@ -89,9 +109,10 @@ for (const m of ["stop", "late"]) {
 test("a reasoning model's thinking is streamed, kept, and never sent back as thought", async () => {
   mode = "think";
   const events = await ask("flow-think");
-  const thinking = events.find((e) => e.type === "thinking");
-  assert.equal(thinking?.text, "Plan Check the hostname first."); // bold markers dropped
-  assert.ok(events.indexOf(thinking) < events.findIndex((e) => e.type === "tool_call"), "thought comes before the action");
+  const thinking = events.filter((e) => e.type === "thinking");
+  assert.equal(thinking.map((e) => e.text).join(""), "**Plan** Check the hostname first."); // streamed as written
+  assert.ok(events.some((e) => e.type === "thinking_end"), "the step is closed");
+  assert.ok(events.indexOf(thinking[0]) < events.findIndex((e) => e.type === "tool_call"), "thought comes before the action");
   const res = await fetch(`http://127.0.0.1:${port}/api/history`, { headers: { cookie, "x-opsmira-conversation": "flow-think" } });
   const { turn } = await res.json();
   assert.deepEqual(turn.thoughts, ["Plan Check the hostname first."]);

@@ -11,6 +11,7 @@ import { modelContent, reasoningText, recoverTextToolCalls, toModelMessages } fr
 import { QUIET_TOOLS } from "./history.js";
 import { addMemory, deleteArtifact, listArtifacts, readArtifact, readMemory, removeMemory, saveArtifact } from "./store.js";
 import { cleanSuggestions, noDashes, safeParse } from "./text.js";
+import { completeStreaming } from "./stream.js";
 
 const client = new OpenAI({ apiKey: env.openrouterApiKey, baseURL: env.openrouterBaseUrl });
 
@@ -461,14 +462,16 @@ export async function runTurn(
 
     let completion;
     try {
-      completion = await client.chat.completions.create(
+      completion = await completeStreaming(
+        client,
         {
           model: model || env.model,
           messages,
           tools: TOOLS,
           max_tokens: tokenCap,
         },
-        { signal },
+        // The thinking of a reasoning model shows up as it is written.
+        { signal, onThinking: (text) => onEvent({ type: "thinking", text }) },
       );
     } catch (err) {
       if (signal?.aborted) return stop();
@@ -492,7 +495,9 @@ export async function runTurn(
     let msg = choice.message;
     // A reasoning model's thinking is shown (collapsed) above what it did; it stays with the stored message.
     const thought = reasoningText(msg);
-    if (thought) onEvent({ type: "thinking", text: thought });
+    // Already streamed? Otherwise (reasoning that only came with the finished reply) show it now.
+    if (thought && !completion.streamedThought) onEvent({ type: "thinking", text: thought });
+    if (thought) onEvent({ type: "thinking_end" });
     let calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
     let text = typeof msg.content === "string" ? msg.content : "";
 
