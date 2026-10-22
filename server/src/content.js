@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 // User message content: plain text, or text plus pasted images in the OpenAI multi-part format.
 // Images are kept in the conversation as data URLs; models without vision get a text stand-in instead.
 
@@ -93,4 +94,40 @@ export function toModelMessages(conversation, vision) {
     void ask;
     return Array.isArray(rest.content) ? { ...rest, content: modelContent(rest.content, vision) } : rest;
   });
+}
+
+/* Some models (DeepSeek, mostly) sometimes write their tool calls into the reply as markup instead of
+   calling the tool: <｜DSML｜tool_calls><｜DSML｜invoke name="inspect"><｜DSML｜parameter name="command"
+   string="true">...</｜DSML｜parameter>... Left alone it shows up as text and the turn stops. */
+const BAR = String.raw`\s*[|｜]\s*`;
+const DSML_BLOCK = new RegExp(String.raw`<${BAR}DSML${BAR}tool_calls\s*>[\s\S]*?(?:<\/${BAR}DSML${BAR}tool_calls\s*>|$)`, "g");
+const DSML_INVOKE = new RegExp(String.raw`<${BAR}DSML${BAR}invoke\s+name="([^"]+)"\s*>([\s\S]*?)(?:<\/${BAR}DSML${BAR}invoke\s*>|$)`, "g");
+const DSML_PARAM = new RegExp(String.raw`<${BAR}DSML${BAR}parameter\s+name="([^"]+)"([^>]*)>([\s\S]*?)<\/${BAR}DSML${BAR}parameter\s*>`, "g");
+const DSML_LEFTOVER = new RegExp(String.raw`<\/?${BAR}DSML${BAR}[a-z_]*[^>]*>`, "gi");
+
+/** Tool calls written as markup in a reply, in the API's shape, plus the reply without the markup. */
+export function recoverTextToolCalls(content) {
+  const text = typeof content === "string" ? content : "";
+  if (!/DSML/.test(text)) return { calls: [], text };
+  const calls = [];
+  for (const block of text.matchAll(DSML_BLOCK)) {
+    for (const invoke of block[0].matchAll(DSML_INVOKE)) {
+      const args = {};
+      for (const param of invoke[2].matchAll(DSML_PARAM)) {
+        const raw = param[3].trim();
+        if (/string\s*=\s*"false"/.test(param[2])) {
+          try {
+            args[param[1]] = JSON.parse(raw);
+            continue;
+          } catch {
+            // not JSON after all: keep it as text
+          }
+        }
+        args[param[1]] = raw;
+      }
+      calls.push({ id: `call_${randomUUID().replace(/-/g, "").slice(0, 24)}`, type: "function", function: { name: invoke[1], arguments: JSON.stringify(args) } });
+    }
+  }
+  const stripped = text.replace(DSML_BLOCK, "").replace(DSML_LEFTOVER, "").trim();
+  return { calls, text: stripped };
 }

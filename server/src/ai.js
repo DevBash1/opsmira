@@ -7,7 +7,7 @@ import { appendAudit } from "./store.js";
 import { deriveScene } from "./views.js";
 import { SURFACES, SURFACE_IDS, collectSurface } from "./surfaces.js";
 import { normalizeView } from "./view.js";
-import { modelContent, toModelMessages } from "./content.js";
+import { modelContent, recoverTextToolCalls, toModelMessages } from "./content.js";
 import { QUIET_TOOLS } from "./history.js";
 import { addMemory, deleteArtifact, listArtifacts, readArtifact, readMemory, removeMemory, saveArtifact } from "./store.js";
 import { cleanSuggestions, noDashes, safeParse } from "./text.js";
@@ -487,8 +487,18 @@ export async function runTurn(
     }
 
     const choice = completion.choices[0];
-    const msg = choice.message;
-    const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+    let msg = choice.message;
+    let calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+    if (calls.length === 0) {
+      // A model that wrote its tool call into the reply as markup: run it, and never show the markup.
+      const recovered = recoverTextToolCalls(msg.content);
+      if (recovered.calls.length) {
+        calls = recovered.calls;
+        msg = { role: "assistant", content: recovered.text || null, tool_calls: calls };
+      } else if (recovered.text !== msg.content) {
+        msg = { ...msg, content: recovered.text };
+      }
+    }
 
     if (calls.length === 0) {
       // A reply cut off by the token cap would "stop halfway" — continue it.
