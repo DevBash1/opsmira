@@ -1,5 +1,5 @@
 import express from "express";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import cookieParser from "cookie-parser";
 import { randomUUID } from "crypto";
@@ -438,18 +438,25 @@ app.post("/api/decline", async (req, res) => {
   res.json({ ok: true, proposal, events });
 });
 
-// The built web app. A self-hosted install opens straight into the console; OPSMIRA_SITE=1 also serves
-// the marketing pages. Anything that is not a file falls back to index.html (client-side routing).
+// The built web app. A self-hosted install is the console at "/"; OPSMIRA_SITE=1 serves the marketing pages
+// at "/" and the console at /app instead. Anything that is not a file falls back to index.html.
 if (existsSync(join(env.webDir, "index.html"))) {
   app.use(express.static(env.webDir, { index: false, maxAge: "1h" }));
+  // The page cannot know which layout the server chose, so the server tells it before the app starts.
   app.use((req, res, next) => {
     if (req.method !== "GET" && req.method !== "HEAD") return next();
     if (req.path.startsWith("/api/")) return next();
-    if (!env.site && !req.path.startsWith("/app")) {
-      res.redirect(302, "/app");
+    if (env.site) {
+      res.sendFile(join(env.webDir, "index.html"));
       return;
     }
-    res.sendFile(join(env.webDir, "index.html"));
+    // Old links to /app, and any other address, land on the console.
+    if (req.path !== "/") {
+      res.redirect(302, "/");
+      return;
+    }
+    const page = readFileSync(join(env.webDir, "index.html"), "utf8").replace("<head>", "<head><script>window.__OPSMIRA_CONSOLE_AT_ROOT__=true</script>");
+    res.type("html").set("Cache-Control", "no-cache").send(page);
   });
 } else {
   console.log(`No web build found at ${env.webDir}. Run "npm run build" to serve the console from this server.`);

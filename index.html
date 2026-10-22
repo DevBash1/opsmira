@@ -13,7 +13,7 @@
       // Console theme before first paint (no light flash): the saved choice, else the system setting.
       // Kept in step with src/lib/theme.ts.
       (function () {
-        if (!location.pathname.startsWith("/app")) return;
+        if (!window.__OPSMIRA_CONSOLE_AT_ROOT__ && !location.pathname.startsWith("/app")) return;
         try {
           var saved = localStorage.getItem("opsmira_theme");
           var dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;

@@ -3,7 +3,7 @@ import { Landing } from "./pages/Landing";
 import { StickyNav } from "./components/StickyNav";
 import { STATIC_SITE } from "./lib/site";
 
-// The console (and its animation library) loads only on /app, keeping the marketing pages lean.
+// The console (and its animation library) loads only when it is shown (/app, or "/" on a self-hosted server), keeping the marketing pages lean.
 // A static build has no console, so its code is left out of the bundle entirely.
 const Console = STATIC_SITE ? null : lazy(() => import("./pages/Console").then((m) => ({ default: m.Console })));
 import type { Page } from "./components/Nav";
@@ -11,6 +11,8 @@ import type { Page } from "./components/Nav";
 function pageFromPath(): Page {
   // A static host has no console behind it: every address is the landing page.
   if (STATIC_SITE) return "landing";
+  // A self-hosted server is the console itself: it says so before the app loads.
+  if (window.__OPSMIRA_CONSOLE_AT_ROOT__) return "app";
   return window.location.pathname.startsWith("/app") ? "app" : "landing";
 }
 
@@ -24,7 +26,7 @@ export default function App() {
   }, []);
 
   const navigate = useCallback((next: Page, hash?: string) => {
-    const path = next === "app" ? "/app" : import.meta.env.BASE_URL;
+    const path = next === "app" ? (window.__OPSMIRA_CONSOLE_AT_ROOT__ ? "/" : "/app") : import.meta.env.BASE_URL;
     window.history.pushState({}, "", hash ? `${path}${hash}` : path);
     setPage(next);
     if (hash) {

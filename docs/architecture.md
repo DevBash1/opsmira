@@ -12,7 +12,7 @@
 
 ## Web app (`src/`)
 
-React 19, Tailwind v4, Vite. The marketing pages and the console (`/app`) are one app.
+React 19, Tailwind v4, Vite. The marketing pages and the console are one app. A self-hosted server shows only the console, at `/` (`/app` redirects there); with `OPSMIRA_SITE=1` it serves the marketing pages at `/` and the console at `/app`.
 `src/pages/Console.tsx` is the chat. A turn is a list of blocks: tool activity, a scene, the reply,
 suggestions. Scenes live in `src/components/console/scenes/`.
 

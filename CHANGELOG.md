@@ -10,6 +10,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   the round is retried with more room. Tool calls a model writes into its reply as markup are run instead of shown.
 
 ### Changed
+- A self-hosted server is now the console at `/` instead of `/app`. Old `/app` links redirect. With
+  `OPSMIRA_SITE=1` the marketing pages stay at `/` and the console at `/app`.
 - Sign-in now takes a username (default `admin`, set with `OPSMIRA_USERNAME`) and the password, and an address is
   blocked for 10 minutes after 5 failed attempts.
 

@@ -136,7 +136,7 @@ Read [CHANGELOG.md](../CHANGELOG.md) first. Data formats are kept backward compa
 | Symptom | Check |
 |---|---|
 | "OPENROUTER_API_KEY is not set" | Put it in `server/.env`, or pass it as an environment variable |
-| Blank page or 404 on `/app` | Run `npm run build`; the server logs if no build is found |
+| Blank page or 404 on `/` | Run `npm run build`; the server logs if no build is found |
 | Signed out after every restart | `OPSMIRA_DATA_DIR` is not persistent (Docker without a volume) |
 | "credits exhausted" | OpenRouter fell back to credits after your own provider key failed. The message names the provider and its error |
 | A server shows "unavailable" | Host key not trusted yet, key needs a passphrase, or no `ssh` on the PATH |
