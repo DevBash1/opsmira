@@ -878,10 +878,12 @@ function ConsoleApp({
   onMood,
   theme,
   onToggleTheme,
+  onLogout,
 }: {
   onMood: (mood: AuroraMood) => void;
   theme: Theme;
   onToggleTheme: (from?: HTMLElement | null) => void;
+  onLogout: () => void;
 }) {
   const [current, setCurrent] = useState<Turn | null>(null);
   const [historyReady, setHistoryReady] = useState(false);
@@ -1581,6 +1583,7 @@ function ConsoleApp({
             dot={unseenActivity}
             onClick={() => togglePanel("audit")}
           />
+          <IconButton icon="log-out" label="Sign out" onClick={onLogout} />
         </div>
 
         <Popover
@@ -2140,7 +2143,20 @@ export function Console() {
         <Aurora mood={mood} />
         <AnimatePresence mode="wait">
           {authed === false && <LoginGate key="login" onAuthed={() => setAuthed(true)} onMood={setMood} />}
-          {authed === true && <ConsoleApp key="app" onMood={setMood} theme={theme} onToggleTheme={toggleTheme} />}
+          {authed === true && (
+            <ConsoleApp
+              key="app"
+              onMood={setMood}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+              onLogout={() => {
+                // The server ends the session and a stopped turn is dropped with it; the form comes back either way.
+                api.logout().catch(() => {});
+                setMood("idle");
+                setAuthed(false);
+              }}
+            />
+          )}
         </AnimatePresence>
       </div>
     </MotionConfig>

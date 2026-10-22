@@ -9,6 +9,7 @@ import {
   clearLoginFailures,
   loginBlockedFor,
   noteLoginFailure,
+  revokeSession,
   issueSessionCookie,
   clearSessionCookie,
   requireAuth,
@@ -75,6 +76,7 @@ app.post("/api/login", (req, res) => {
 app.post("/api/logout", (req, res) => {
   const id = sessionIdFromRequest(req);
   if (id) deleteSession(id);
+  revokeSession(req);
   clearSessionCookie(res);
   res.json({ ok: true });
 });

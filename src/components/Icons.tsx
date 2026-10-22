@@ -62,6 +62,7 @@ const PATHS: Record<string, string[]> = {
 
 /** Outline icons on a 24-grid (lucide geometry), drawn as strokes and scaled into the 14-grid. */
 const STROKES: Record<string, string[]> = {
+  "log-out": ["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "m16 17 5-5-5-5", "M21 12H9"],
   brain: [
     "M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z",
     "M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z",

@@ -1,4 +1,6 @@
 import { createHmac, timingSafeEqual, randomUUID } from "crypto";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "fs";
+import { join } from "path";
 import { env } from "./env.js";
 
 const COOKIE_NAME = "opsmira_session";
@@ -77,6 +79,38 @@ export function clearSessionCookie(res) {
   res.clearCookie(COOKIE_NAME);
 }
 
+/* Signed cookies carry no server state, so signing out revokes the session id here until its cookie would
+   have expired anyway. Without this a copied cookie would outlive the sign-out. */
+const REVOKED_FILE = join(env.dataDir, "revoked-sessions.json");
+const revoked = new Map(); // session id -> expiry (ms)
+try {
+  if (existsSync(REVOKED_FILE)) for (const [id, expires] of Object.entries(JSON.parse(readFileSync(REVOKED_FILE, "utf8")))) revoked.set(id, Number(expires));
+} catch {
+  // an unreadable file only means nothing is revoked yet
+}
+
+function saveRevoked() {
+  const now = Date.now();
+  for (const [id, expires] of revoked) if (expires <= now) revoked.delete(id);
+  try {
+    const tmp = `${REVOKED_FILE}.tmp`;
+    writeFileSync(tmp, JSON.stringify(Object.fromEntries(revoked)), { mode: 0o600 });
+    renameSync(tmp, REVOKED_FILE);
+  } catch {
+    // still revoked in memory for this run
+  }
+}
+
+/** Ends the session on this request for good, so its cookie stops working even if it was copied. */
+export function revokeSession(req) {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (typeof token !== "string") return;
+  const [id, expires] = token.split(".");
+  if (!id || !Number(expires) || !parseToken(token)) return;
+  revoked.set(id, Number(expires));
+  saveRevoked();
+}
+
 function parseToken(token) {
   if (typeof token !== "string") return null;
   const parts = token.split(".");
@@ -86,6 +120,7 @@ function parseToken(token) {
   const payload = `${id}.${expires}`;
   if (!safeEqual(sig, sign(payload))) return null;
   if (Number(expires) <= Date.now()) return null;
+  if (revoked.has(id)) return null;
   return id;
 }
 

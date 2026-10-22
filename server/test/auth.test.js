@@ -26,3 +26,14 @@ test("five failures block an address, a success clears it", () => {
   clearLoginFailures(ip);
   assert.equal(loginBlockedFor(ip), 0);
 });
+
+test("signing out revokes the session even for a copied cookie", async () => {
+  const { issueSessionCookie, isAuthenticated, revokeSession } = await import("../src/auth.js");
+  let cookie = "";
+  issueSessionCookie({ secure: false }, { cookie: (_name, value) => (cookie = value) });
+  const req = { cookies: { opsmira_session: cookie } };
+  assert.equal(isAuthenticated(req), true);
+  revokeSession(req);
+  assert.equal(isAuthenticated(req), false); // the same cookie, replayed
+  assert.equal(isAuthenticated({ cookies: { opsmira_session: "forged.1.abc" } }), false);
+});
