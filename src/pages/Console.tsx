@@ -65,6 +65,8 @@ type Turn = {
   ask: string;
   /** Images pasted or dropped with the ask. */
   images: string[];
+  /** What a reasoning model thought, one entry per step. */
+  thoughts: string[];
   tools: ToolCall[];
   proposals: Proposal[];
   /** Assistant messages in arrival order: a turn can gain one after an approval. */
@@ -87,6 +89,7 @@ const emptyTurn = (ask: string, images: string[] = []): Turn => ({
   id: nextId(),
   ask,
   images,
+  thoughts: [],
   tools: [],
   proposals: [],
   replies: [],
@@ -102,6 +105,7 @@ function turnFromServer(t: ServerTurn): Turn {
     id: nextId(),
     ask: t.ask,
     images: t.images,
+    thoughts: t.thoughts ?? [],
     tools: t.tools.map((x) => ({ id: nextId(), kind: x.kind, command: x.command, title: x.title, output: x.output, exitCode: x.exitCode, rejected: x.rejected, pending: false })),
     proposals: t.proposals,
     replies: t.replies,
@@ -147,6 +151,7 @@ function applyEvent(turn: Turn, event: ChatEvent): Turn {
     tools[realIdx] = { ...tools[realIdx], output: event.output, exitCode: event.exitCode, pending: false };
     return { ...turn, tools };
   }
+  if (event.type === "thinking") return { ...turn, thoughts: [...turn.thoughts, event.text] };
   if (event.type === "proposal") return { ...turn, proposals: [...turn.proposals, event.proposal] };
   if (event.type === "scene") return { ...turn, scene: { scene: event.scene, data: event.data } };
   if (event.type === "message") return { ...turn, replies: [...turn.replies, event.text] };
@@ -386,6 +391,35 @@ function ToolActivityLine({ tool, open, onToggle }: { tool: ToolCall; open: bool
   );
 }
 
+/** A reasoning model's thinking: one quiet line, open it to read. */
+function ThoughtLine({ thoughts }: { thoughts: string[] }) {
+  const [open, setOpen] = useState(false);
+  const reduce = useReducedMotion();
+  return (
+    <div className="flex w-full flex-col items-start">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="group flex w-fit cursor-pointer flex-row items-center gap-[6px] rounded-full py-[2px] pr-[6px] text-[12px] text-[var(--muted)] transition-colors duration-200 ease-enter hover:text-[var(--ink)]"
+      >
+        <Icon name="sparkles" className="h-[12px] w-[12px] shrink-0 text-[var(--accent-2)]" />
+        <span>{thoughts.length > 1 ? `Thought · ${thoughts.length} steps` : "Thought"}</span>
+        <Icon name="arrow-up" className={`h-[9px] w-[9px] shrink-0 transition-transform duration-300 ease-move ${open ? "rotate-0" : "rotate-180"}`} />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div key="thought" {...collapseY(reduce)} className="w-full">
+            <div className="mt-[6px] max-h-[240px] w-full overflow-auto border-l border-[var(--hairline)] pl-[14px] text-[12.5px]/[20px] whitespace-pre-wrap text-[var(--muted)]">
+              {thoughts.join("\n\n")}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 const VISIBLE_TOOLS = 3;
 
 /** The last three commands stay in view; older ones slide up into the "+N earlier" counter. */
@@ -529,6 +563,12 @@ function TurnBlock({
         .map((s) => (
           <AskLine key={s.localId} text={s.text} images={s.images} steered />
         ))}
+
+      {turn.thoughts.length > 0 && (
+        <div style={{ animationDelay: "30ms" }} className="w-full motion-safe:animate-blur-rise">
+          <ThoughtLine thoughts={turn.thoughts} />
+        </div>
+      )}
 
       {turn.tools.length > 0 && (
         <div style={{ animationDelay: "50ms" }} className="w-full motion-safe:animate-blur-rise">

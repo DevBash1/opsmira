@@ -26,7 +26,8 @@ const fake = http.createServer((req, res) => {
       return res.end(JSON.stringify({ id: "x", object: "chat.completion", created: 1, model: "fake", choices: [{ index: 0, message: { role: "assistant", content: null, reasoning: "thinking..." }, finish_reason: "length" }] }));
     }
     if (!answered) {
-      if (mode === "late" && last.startsWith("Continue")) message.content = MARKUP;
+      if (mode === "think") Object.assign(message, { content: MARKUP, reasoning: "**Plan** Check the hostname first." });
+      else if (mode === "late" && last.startsWith("Continue")) message.content = MARKUP;
       else if (mode === "late") [message.content, finish] = ["Checking.", "length"];
       else message.content = MARKUP;
     }
@@ -84,3 +85,14 @@ for (const m of ["stop", "late"]) {
     assert.ok(!JSON.stringify(events).includes("DSML"), "no markup reached the console");
   });
 }
+
+test("a reasoning model's thinking is streamed, kept, and never sent back as thought", async () => {
+  mode = "think";
+  const events = await ask("flow-think");
+  const thinking = events.find((e) => e.type === "thinking");
+  assert.equal(thinking?.text, "Plan Check the hostname first."); // bold markers dropped
+  assert.ok(events.indexOf(thinking) < events.findIndex((e) => e.type === "tool_call"), "thought comes before the action");
+  const res = await fetch(`http://127.0.0.1:${port}/api/history`, { headers: { cookie, "x-opsmira-conversation": "flow-think" } });
+  const { turn } = await res.json();
+  assert.deepEqual(turn.thoughts, ["Plan Check the hostname first."]);
+});

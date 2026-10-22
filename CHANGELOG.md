@@ -5,11 +5,17 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- A reasoning model that used up its reply budget thinking no longer ends the turn with "I stopped before finishing":
+  the round is retried with more room. Tool calls a model writes into its reply as markup are run instead of shown.
+
 ### Changed
 - Sign-in now takes a username (default `admin`, set with `OPSMIRA_USERNAME`) and the password, and an address is
   blocked for 10 minutes after 5 failed attempts.
 
 ### Added
+- Reasoning models: their thinking shows as a quiet "Thought" line above what they did, collapsed until opened,
+  and is kept with the chat.
 - Connect a server without SSH: `opsmira-agent` (one file, Node 22+) dials out to the console with a one-time
   token. Surfaces work on it as `agent:<name>`. Install it as a service with `agent/install.sh`, or run it once.
   Revoke it from the Surfaces menu.

@@ -7,7 +7,7 @@ import { appendAudit } from "./store.js";
 import { deriveScene } from "./views.js";
 import { SURFACES, SURFACE_IDS, collectSurface } from "./surfaces.js";
 import { normalizeView } from "./view.js";
-import { modelContent, recoverTextToolCalls, toModelMessages } from "./content.js";
+import { modelContent, reasoningText, recoverTextToolCalls, toModelMessages } from "./content.js";
 import { QUIET_TOOLS } from "./history.js";
 import { addMemory, deleteArtifact, listArtifacts, readArtifact, readMemory, removeMemory, saveArtifact } from "./store.js";
 import { cleanSuggestions, noDashes, safeParse } from "./text.js";
@@ -490,6 +490,9 @@ export async function runTurn(
 
     const choice = completion.choices[0];
     let msg = choice.message;
+    // A reasoning model's thinking is shown (collapsed) above what it did; it stays with the stored message.
+    const thought = reasoningText(msg);
+    if (thought) onEvent({ type: "thinking", text: thought });
     let calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
     let text = typeof msg.content === "string" ? msg.content : "";
 
@@ -537,7 +540,7 @@ export async function runTurn(
       text = recovered.text;
       if (recovered.calls.length) {
         calls = recovered.calls;
-        msg = { role: "assistant", content: recovered.text || null, tool_calls: calls };
+        msg = { role: "assistant", content: recovered.text || null, tool_calls: calls, ...(thought ? { thought } : {}) };
       }
     }
 
@@ -554,7 +557,7 @@ export async function runTurn(
         !raw || (toolsUsed && raw.length < 240 && (/(:|…|\.\.\.)$/.test(raw) || /^(now|next|let me|i'll|i will|checking|running|trying|first)\b/i.test(raw)));
       if (unfinished && !sceneShown && nudges < 2 && !signal?.aborted) {
         nudges++;
-        if (raw) messages.push({ role: "assistant", content: raw });
+        if (raw) messages.push({ role: "assistant", content: raw, ...(thought ? { thought } : {}) });
         messages.push({
           role: "user",
           content: "[System] You stopped before finishing. If more work is needed, call the next tool now. Otherwise give the owner your final answer in one or two short sentences.",
@@ -563,7 +566,7 @@ export async function runTurn(
         continue;
       }
       const finalText = noDashes(sceneShown ? condenseSceneReply(raw) : raw) || (sceneShown ? "" : "I stopped before finishing. Say continue and I will pick it up.");
-      const final = { role: "assistant", content: finalText || "The console shows the result." };
+      const final = { role: "assistant", content: finalText || "The console shows the result.", ...(thought ? { thought } : {}) };
       messages.push(final);
       conversation.push(final);
       if (finalText) onEvent({ type: "message", text: finalText });

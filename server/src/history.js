@@ -1,6 +1,6 @@
 // Rebuilds what the console shows for a conversation's latest turn (tool pills, surface, replies,
 // approvals, follow-up chips, memory notes) from the stored model messages, and rewinds a conversation.
-import { contentImages, contentText, recoverTextToolCalls } from "./content.js";
+import { contentImages, contentText, reasoningText, recoverTextToolCalls } from "./content.js";
 import { deriveScene } from "./views.js";
 import { cleanSuggestions, safeParse } from "./text.js";
 
@@ -28,6 +28,7 @@ export function buildLastTurn(conversation, proposals) {
     ask: contentText(first.content),
     images: contentImages(first.content),
     steers: [],
+    thoughts: [],
     tools: [],
     scene: undefined,
     replies: [],
@@ -48,6 +49,8 @@ export function buildLastTurn(conversation, proposals) {
       }
     } else if (m.role === "assistant") {
       const list = Array.isArray(m.tool_calls) ? m.tool_calls : [];
+      const thought = reasoningText(m);
+      if (thought) turn.thoughts.push(thought);
       for (const call of list) calls.set(call.id, { name: call.function?.name, args: safeParse(call.function?.arguments) ?? {} });
       // Chats saved before tool calls written as markup were recovered still hold that markup.
       const text = typeof m.content === "string" ? recoverTextToolCalls(m.content).text.trim() : "";

@@ -88,6 +88,12 @@ export function toModelMessages(conversation, vision) {
         ),
       };
     }
+    if (m.role === "assistant" && "thought" in m) {
+      // `thought` is kept for the console to show: models never see it.
+      const { thought, ...rest } = m;
+      void thought;
+      return rest;
+    }
     if (m.role !== "user") return m;
     // `ask` only marks where an owner message starts a turn (for rewind and history): models never see it.
     const { ask, ...rest } = m;
@@ -130,4 +136,27 @@ export function recoverTextToolCalls(content) {
   }
   const stripped = text.replace(DSML_BLOCK, "").replace(DSML_LEFTOVER, "").trim();
   return { calls, text: stripped };
+}
+
+const MAX_THOUGHT_CHARS = 8000;
+
+/** What a reasoning model thought before answering, as plain text ("" when it sent none). */
+export function reasoningText(message) {
+  if (!message || typeof message !== "object") return "";
+  let text = "";
+  for (const key of ["reasoning", "reasoning_content", "thought"]) {
+    if (typeof message[key] === "string" && message[key].trim()) {
+      text = message[key];
+      break;
+    }
+  }
+  if (!text && Array.isArray(message.reasoning_details)) {
+    // OpenRouter's structured form: readable parts only (encrypted blocks carry no text).
+    text = message.reasoning_details
+      .map((part) => (typeof part?.text === "string" ? part.text : typeof part?.summary === "string" ? part.summary : ""))
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  text = text.replace(/\*\*/g, "").trim();
+  return text.length > MAX_THOUGHT_CHARS ? `${text.slice(0, MAX_THOUGHT_CHARS).trimEnd()}…` : text;
 }

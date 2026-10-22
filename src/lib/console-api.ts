@@ -95,6 +95,8 @@ export type ChatEvent =
   | { type: "proposal"; proposal: Proposal }
   | { type: "scene"; scene: string; data?: Record<string, unknown> }
   | { type: "message"; text: string }
+  /** What a reasoning model thought before it acted or answered. */
+  | { type: "thinking"; text: string }
   | { type: "error"; text: string; code?: string }
   /** Tappable follow-up actions the agent offers under its reply. */
   | { type: "suggestions"; items: string[] }
@@ -114,6 +116,7 @@ export interface ServerTurn {
   images: string[];
   steers: { text: string; images: string[] }[];
   tools: { kind: "inspect" | "act"; command: string; title?: string; output?: string; exitCode?: number | null; rejected?: string }[];
+  thoughts: string[];
   scene?: { scene: string; data?: Record<string, unknown> };
   replies: string[];
   proposals: Proposal[];
