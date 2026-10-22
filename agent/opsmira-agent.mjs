@@ -302,8 +302,12 @@ function startApp(opts) {
     log(`could not start the app: ${err.message}`);
     process.exit(127);
   });
-  // "close", not "exit": the app's last output (what it wrote as it died) has been read by then.
-  child.on("close", (code, signal) => {
+  // Leave when the app's output has been read ("close"), so what it wrote as it died is kept. A grandchild that
+  // outlives the app keeps the pipes open, so also leave a moment after "exit" rather than waiting on it.
+  let left = false;
+  const leave = (code, signal) => {
+    if (left) return;
+    left = true;
     opts.stop = true;
     try {
       opts.socket?.close();
@@ -312,7 +316,9 @@ function startApp(opts) {
     }
     log(`the app exited (${signal ?? code}); the agent is stopping with it`);
     process.exit(code ?? 128 + (os.constants.signals[signal] ?? 1));
-  });
+  };
+  child.on("close", leave);
+  child.on("exit", (code, signal) => setTimeout(() => leave(code, signal), 500).unref());
 }
 
 async function main() {

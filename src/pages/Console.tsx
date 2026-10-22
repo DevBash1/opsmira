@@ -11,6 +11,7 @@ import { ConnectServer } from "../components/console/ConnectServer";
 import { IconButton } from "../components/console/IconButton";
 import { ModelChip } from "../components/console/ModelChip";
 import { ModeChip } from "../components/console/ModeChip";
+import { WhereChip, setLocalLabel } from "../components/console/WhereChip";
 import { ServerChip, type ServerOption } from "../components/console/ServerChip";
 import { Spinner } from "../components/console/Spinner";
 import { Popover } from "../components/console/Popover";
@@ -373,9 +374,7 @@ function ToolActivityLine({ tool, open, onToggle }: { tool: ToolCall; open: bool
             />
           )}
         </span>
-        {tool.server && (
-          <span className="font-code shrink-0 rounded-full bg-[var(--soft)] px-[7px] py-[1px] text-[10px] text-[var(--accent-strong)]">{tool.server.replace(/^agent:/, "")}</span>
-        )}
+        <WhereChip server={tool.server} />
         <span className="font-code min-w-0 truncate text-[12px] text-[var(--ink)]">{trimCommand(tool.command)}</span>
         {tool.kind === "act" && (
           <span className="font-code shrink-0 rounded-full bg-[color-mix(in_oklab,var(--danger)_14%,transparent)] px-[6px] py-[1px] text-[9px] tracking-[0.5px] text-[var(--danger)]">
@@ -1142,6 +1141,7 @@ function ConsoleApp({
           if (!alive) return;
           setAgentList(r.agents);
           setDefaultServer(r.defaultServer ?? "");
+          setLocalLabel(r.defaultServer ? "Opsmira container" : "this server");
           // A server that was removed stops being the choice.
           setServerId((id) => {
             if (id && id !== "local" && !r.agents.some((a) => a.host === id)) {

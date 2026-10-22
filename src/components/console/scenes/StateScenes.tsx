@@ -3,6 +3,7 @@ import { Icon } from "../../Icons";
 import type { Proposal } from "../../../lib/console-api";
 import { Collapse } from "../Collapse";
 import { ResolvedPill } from "../ResolvedPill";
+import { WhereChip } from "../WhereChip";
 import {
   Action,
   KeyValue,
@@ -227,6 +228,7 @@ function LiveDestructive({
               <span className="font-code text-[10px] text-[var(--muted)]">risk · {proposal.riskLevel}</span>
             </div>
             <div className="font-code w-full overflow-x-auto rounded-[8px] bg-[var(--canvas)] px-[11px] py-[9px] text-[11.5px] whitespace-pre-wrap text-[var(--ink)] [outline:1px_solid_var(--hairline)]">
+              <WhereChip server={proposal.server} className="mr-[8px]" />
               <span className="mr-[8px] text-[var(--muted)]">$</span>
               {proposal.command}
             </div>

@@ -14,6 +14,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
   app under the agent so every deploy reconnects as the same server and its output can be read.
 
 ### Fixed
+- Every command and approval card now says where it runs: the connected server's name, or "this server" (or
+  "Opsmira container" when a default server is set) for the machine Opsmira is on. Local commands used to show no tag.
+- A hosted app's agent no longer hangs after SIGTERM when a child process outlives the app, and no longer drops the
+  last output of a crashing app.
 - The agent installer no longer picks a snap-packaged Node (it cannot run as a service and crash-looped); it uses
   `--install-node`'s private Node 22 instead.
 - A reasoning model that used up its reply budget thinking no longer ends the turn with "I stopped before finishing":

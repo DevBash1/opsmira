@@ -6,6 +6,7 @@ import { Spinner } from "./console/Spinner";
 import { resultText } from "./console/ResolvedPill";
 import type { Proposal } from "../lib/console-api";
 import { EdgeLight } from "./EdgeLight";
+import { WhereChip } from "./console/WhereChip";
 
 const RISK_STEPS: Record<Proposal["riskLevel"], number> = { Low: 1, Medium: 2, High: 3 };
 
@@ -44,6 +45,7 @@ function TypedConfirmCard({
       </div>
 
       <div className="flex w-full shrink-0 flex-row items-start gap-[8px] rounded-[10px] bg-[var(--canvas)] p-[10px_12px] [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]">
+        <WhereChip server={proposal.server} />
         <div className="font-code text-[12px] whitespace-nowrap text-[var(--muted)]">$</div>
         <div className="font-code min-w-0 flex-1 overflow-x-auto text-[12px] whitespace-nowrap text-[var(--ink)] hide-scrollbar">
           {proposal.command}
@@ -122,7 +124,10 @@ function DestructiveBarBody({
       <Icon name="triangle-alert" className="h-[16px] w-[16px] shrink-0 text-[var(--ink)]" />
       <div className="flex min-w-0 flex-1 flex-col items-start gap-[2px]">
         <div className="text-[13px] font-semibold text-[var(--ink)]">{proposal.title}</div>
-        <div className="font-code w-full truncate text-[11px] text-[var(--muted)]">{proposal.command}</div>
+        <div className="flex w-full min-w-0 flex-row items-center gap-[6px]">
+          <WhereChip server={proposal.server} />
+          <div className="font-code min-w-0 flex-1 truncate text-[11px] text-[var(--muted)]">{proposal.command}</div>
+        </div>
       </div>
       <div className="flex w-full shrink-0 flex-row items-center gap-[8px] sm:w-fit">
         <button
@@ -262,7 +267,8 @@ export function ConsoleApprovalCard({
             </div>
 
             <div className="glass-well flex w-full shrink-0 flex-row items-start gap-[8px] rounded-[12px] p-[10px_12px] [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]">
-              <div className="font-code text-[12px] whitespace-nowrap text-[var(--muted)]">$</div>
+              <WhereChip server={proposal.server} />
+        <div className="font-code text-[12px] whitespace-nowrap text-[var(--muted)]">$</div>
               <div className="font-code min-w-0 flex-1 overflow-x-auto text-[12px] whitespace-nowrap text-[var(--ink)] hide-scrollbar">
                 {proposal.command}
               </div>
