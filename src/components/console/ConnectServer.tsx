@@ -204,11 +204,15 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
               className="font-code rounded-[8px] bg-[var(--surface)] px-[8px] py-[5px] text-[11px] text-[var(--ink)] outline-none placeholder:text-[var(--muted)] [outline:1px_solid_var(--line)] focus:[outline-color:var(--accent)]"
             />
           )}
-          <label className="flex w-fit cursor-pointer flex-row items-center gap-[7px] text-[11.5px] text-[var(--ink)]">
-            <input type="checkbox" checked={access === "operate"} onChange={(e) => setAccess(e.target.checked ? "operate" : "read-only")} className="accent-[var(--accent)]" />
-            Allow commands
-            <span className="text-[10.5px] text-[var(--muted)]">{access === "operate" ? "you approve changes" : "read only"}</span>
-          </label>
+          <Choice
+            value={access}
+            options={[
+              { id: "read-only", label: "Read only" },
+              { id: "operate", label: "Run commands" },
+            ]}
+            onChange={setAccess}
+          />
+          <span className="text-[10.5px] text-[var(--muted)]">{access === "operate" ? "You approve each change." : "Surfaces only. Nothing is changed."}</span>
           <div className="flex flex-row items-center gap-[12px]">
             <button
               type="button"
