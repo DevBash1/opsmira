@@ -11,6 +11,7 @@ import { ConnectServer } from "../components/console/ConnectServer";
 import { IconButton } from "../components/console/IconButton";
 import { ModelChip } from "../components/console/ModelChip";
 import { ModeChip } from "../components/console/ModeChip";
+import { ServerChip, type ServerOption } from "../components/console/ServerChip";
 import { Spinner } from "../components/console/Spinner";
 import { Popover } from "../components/console/Popover";
 import { PresenceIndicator } from "../components/console/PresenceIndicator";
@@ -24,7 +25,9 @@ import {
   ApiError,
   currentConversationId,
   resetConversation,
+  setServerChoice,
   switchConversation,
+  type AgentInfo,
   type AgentMode,
   type AuditEntry,
   type Artifact,
@@ -184,6 +187,7 @@ function applyEvent(turn: Turn, event: ChatEvent): Turn {
 
 const MODEL_STORAGE_KEY = "opsmira_model";
 const MODE_STORAGE_KEY = "opsmira_mode";
+const SERVER_STORAGE_KEY = "opsmira_server";
 const DISCLAIMER: Record<AgentMode, string> = {
   ask: "You're in control. Server changes always need your approval.",
   full: "Full access is on. The agent runs commands, changes included, without asking.",
@@ -927,6 +931,18 @@ function ConsoleApp({
       return "ask";
     }
   });
+  // The server the agent works on. "" means the server's own default; the choice is kept across visits.
+  const [serverId, setServerId] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SERVER_STORAGE_KEY) ?? "";
+      setServerChoice(saved);
+      return saved;
+    } catch {
+      return "";
+    }
+  });
+  const [agentList, setAgentList] = useState<AgentInfo[]>([]);
+  const [defaultServer, setDefaultServer] = useState("");
   // Mirrors of in-flight state for callbacks that outlive a render (follow-ups, stop fallback).
   const sendingRef = useRef(false);
   const busyRef = useRef(false);
@@ -1115,6 +1131,60 @@ function ConsoleApp({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [preview, showScenes, showAudit, showHistory, showMemory, showArtifacts]);
+
+  // Servers that connected themselves, refreshed while the console is open.
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      api
+        .agents()
+        .then((r) => {
+          if (!alive) return;
+          setAgentList(r.agents);
+          setDefaultServer(r.defaultServer ?? "");
+          // A server that was removed stops being the choice.
+          setServerId((id) => {
+            if (id && id !== "local" && !r.agents.some((a) => a.host === id)) {
+              setServerChoice("");
+              return "";
+            }
+            return id;
+          });
+        })
+        .catch(() => {});
+    load();
+    const t = window.setInterval(() => document.visibilityState === "visible" && load(), 20000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, []);
+
+  const serverOptions: ServerOption[] = [
+    {
+      id: "local",
+      label: defaultServer ? "Opsmira container" : "This server",
+      detail: defaultServer ? "Only the container Opsmira runs in, not the machine around it." : "The machine Opsmira runs on.",
+      online: true,
+    },
+    ...agentList.map((a) => ({
+      id: a.host,
+      label: a.name,
+      detail: a.online ? (a.access === "operate" || a.access === "full" ? "Connected. Commands allowed." : "Connected. Read-only.") : "Offline",
+      online: a.online,
+    })),
+  ];
+  const shownServer = serverId || defaultServer || "local";
+  const pickServer = (id: string) => {
+    setServerId(id);
+    setServerChoice(id);
+    try {
+      localStorage.setItem(SERVER_STORAGE_KEY, id);
+    } catch {
+      // ignore: the choice still applies for this visit
+    }
+    showHint(`Working on ${serverOptions.find((s) => s.id === id)?.label ?? id}.`);
+  };
 
   const pickMode = (next: AgentMode) => {
     setMode(next);
@@ -2051,6 +2121,7 @@ function ConsoleApp({
           />
           <div className="flex w-full min-w-0 shrink-0 flex-row items-center gap-[10px]">
             <ModeChip mode={mode} onChange={pickMode} disabled={running} />
+            {agentList.length > 0 && <ServerChip servers={serverOptions} value={shownServer} onChange={pickServer} disabled={running} />}
             {models.length > 0 && model && <ModelChip models={models} value={model} onChange={pickModel} attention={chipAttention} />}
             {/* One button: Send when idle; while the agent works it is Stop (a stop square inside the
                 turning loading ring), and becomes "send guidance" as soon as something is typed. */}

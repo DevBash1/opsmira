@@ -16,7 +16,7 @@ import {
   isAuthenticated,
   sessionIdFromRequest,
 } from "./auth.js";
-import { pickServer, runTurn } from "./ai.js";
+import { defaultFor, pickServer, runTurn } from "./ai.js";
 import { getModels, getModelInfo } from "./models.js";
 import { contentImages, contentText, parseUserInput, userContent } from "./content.js";
 import { runCommand } from "./exec.js";
@@ -135,7 +135,7 @@ app.get("/api/surfaces", (req, res) => {
 });
 
 app.get("/api/agents", (req, res) => {
-  res.json({ agents: listAgents() });
+  res.json({ agents: listAgents(), defaultServer: env.defaultServer });
 });
 
 /** A one-time command that connects a server to this console. */
@@ -166,7 +166,7 @@ app.get("/api/hosts", (req, res) => {
 
 app.get("/api/surfaces/:id", async (req, res) => {
   const target = typeof req.query.target === "string" && req.query.target ? req.query.target.slice(0, 300) : undefined;
-  const host = pickServer(typeof req.query.host === "string" ? req.query.host.slice(0, 160) : "") || undefined;
+  const host = pickServer(typeof req.query.host === "string" ? req.query.host.slice(0, 160) : "", defaultFor(req.get("x-opsmira-server"))) || undefined;
   const read = await collectSurface(req.params.id, { target, host });
   if (read.ok) res.json({ scene: read.scene, data: read.data });
   else res.json({ scene: "unavailable", data: { for: read.scene ?? req.params.id, reason: read.reason, hint: read.hint, ...(read.ssh ? { ssh: read.ssh } : {}) } });
@@ -284,7 +284,7 @@ app.post("/api/chat", async (req, res) => {
   conversation.push({ role: "user", content: userContent(input.text, input.images), ask: true });
 
   try {
-    await runTurn(conversation, send, model, pendingApprovals, { signal: run.abort.signal, steers: run.steers, vision, fullAccess: req.body?.mode === "full" });
+    await runTurn(conversation, send, model, pendingApprovals, { signal: run.abort.signal, steers: run.steers, vision, fullAccess: req.body?.mode === "full", server: req.get("x-opsmira-server") });
   } catch (err) {
     if (!run.abort.signal.aborted) send({ type: "error", text: err.message, code: err.code });
   } finally {
@@ -382,6 +382,7 @@ app.post("/api/approve", async (req, res) => {
         steers: run.steers,
         vision,
         fullAccess: req.body?.mode === "full",
+        server: req.get("x-opsmira-server"),
       });
     } catch (err) {
       if (!run.abort.signal.aborted) events.push({ type: "error", text: err.message, code: err.code });
@@ -426,6 +427,7 @@ app.post("/api/decline", async (req, res) => {
         steers: run.steers,
         vision,
         fullAccess: req.body?.mode === "full",
+        server: req.get("x-opsmira-server"),
       });
     } catch (err) {
       if (!run.abort.signal.aborted) events.push({ type: "error", text: err.message, code: err.code });

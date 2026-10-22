@@ -45,8 +45,14 @@ export function currentConversationId(): string {
   return conversationId();
 }
 
+/** The server the owner picked in the composer ("local" or agent:<name>); empty means the server's own default. */
+let serverChoice = "";
+export function setServerChoice(id: string) {
+  serverChoice = id;
+}
+
 function headers(extra: Record<string, string> = {}): Record<string, string> {
-  return { [CONVERSATION_HEADER]: conversationId(), ...extra };
+  return { [CONVERSATION_HEADER]: conversationId(), ...(serverChoice ? { "X-Opsmira-Server": serverChoice } : {}), ...extra };
 }
 
 export interface Proposal {
@@ -191,7 +197,7 @@ export type AgentInfo = {
   name: string;
   host: string;
   online: boolean;
-  access: "read-only" | "full" | null;
+  access: "read-only" | "operate" | "full" | null;
   hostname: string | null;
   platform: string | null;
   createdAt: string;
@@ -225,12 +231,12 @@ export const api = {
     if (opts.target) q.set("target", opts.target);
     if (opts.host) q.set("host", opts.host);
     const qs = q.toString();
-    return fetch(`/api/surfaces/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`).then((r) =>
+    return fetch(`/api/surfaces/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`, { headers: headers() }).then((r) =>
       json<{ scene: string; data: Record<string, unknown> }>(r),
     );
   },
   hosts: () => fetch("/api/hosts").then((r) => json<{ hosts: string[] }>(r)),
-  agents: () => fetch("/api/agents").then((r) => json<{ agents: AgentInfo[] }>(r)),
+  agents: () => fetch("/api/agents").then((r) => json<{ agents: AgentInfo[]; defaultServer?: string }>(r)),
   agentToken: () => post("/api/agents/token", {}).then((r) => json<{ token: string; expiresAt: number; command: string; manual: string }>(r)),
   removeAgent: (id: string) => fetch(`/api/agents/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers() }).then((r) => json<{ ok: true }>(r)),
   audit: () => fetch("/api/audit").then((r) => json<{ entries: AuditEntry[] }>(r)),

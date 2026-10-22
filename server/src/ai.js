@@ -147,12 +147,17 @@ const SURFACE_TOOL = {
 };
 
 const SERVER_PARAM =
-  "Optional. A connected server to run this on, as shown in your prompt (for example agent:web-1). " +
-  (env.defaultServer
-    ? `Leave it out to run on ${env.defaultServer}. Use "local" only for the container Opsmira itself runs in.`
-    : "Leave it out to run on the server Opsmira itself is on.");
+  "Optional. A connected server to run this on, as shown in your prompt (for example agent:web-1). Leave it out to use the server the owner has selected, which your prompt names. \"local\" is the machine (or container) Opsmira itself runs on.";
 
-/** The server a call names, with the configured default filled in. "local" means Opsmira's own machine (or container). */
+/** The server a turn uses when a call names none: the owner's pick in the console, else the configured default. */
+export function defaultFor(selected, configured = env.defaultServer) {
+  const s = typeof selected === "string" ? selected.trim() : "";
+  if (s === "local") return "";
+  if (s.startsWith(AGENT_PREFIX) && s.length <= 160) return s;
+  return configured;
+}
+
+/** The server a call names, with the default filled in. "local" means Opsmira's own machine (or container). */
 export function pickServer(raw, defaultServer = env.defaultServer) {
   const named = typeof raw === "string" ? raw.trim() : "";
   if (named === "local") return "";
@@ -163,8 +168,8 @@ export function pickServer(raw, defaultServer = env.defaultServer) {
  * The connected server a call targets: { name } (or {} for this server), or { error } to hand back to the model.
  * Commands only run on a server that is online and was started to allow commands.
  */
-function targetServer(asked) {
-  const raw = pickServer(asked);
+function targetServer(asked, dflt) {
+  const raw = pickServer(asked, dflt);
   if (!raw) return {};
   const host = typeof raw === "string" ? raw.trim() : "";
   const name = host.startsWith(AGENT_PREFIX) ? host.slice(AGENT_PREFIX.length) : "";
@@ -173,7 +178,7 @@ function targetServer(asked) {
     return { error: `unknown server "${String(raw).slice(0, 60)}". Connected servers: ${known.join(", ") || "none"}. Leave server out to run on this server.` };
   }
   const access = agentAccess(name);
-  if (!access) return { error: `${host} is not connected right now.${host === env.defaultServer ? ' It is the default server; pass server "local" to use the container Opsmira runs in instead.' : ""}` };
+  if (!access) return { error: `${host} is not connected right now.${host === dflt ? ' It is the selected server; pass server "local" to use the machine Opsmira runs on instead.' : ""}` };
   if (access !== "operate") {
     return { error: `${host} is read-only: it was started without --access operate, so commands cannot run there. Surfaces (show_surface with host: "${host}") still work. Tell the owner how to allow commands if they need it.` };
   }
@@ -181,13 +186,13 @@ function targetServer(asked) {
 }
 
 /** The servers that connected themselves, for the prompt. Empty when there are none. */
-function serversNote() {
+function serversNote(dflt) {
   const agents = listAgents();
   if (!agents.length) return "";
   const lines = agents.map((a) => `- ${a.host}: ${a.online ? "online" : "offline"}${a.online ? (a.access === "operate" ? ", commands allowed" : ", read-only (surfaces only)") : ""}${a.hostname ? `, hostname ${a.hostname}` : ""}`);
-  const where = env.defaultServer
-    ? `Without server (and without host for show_surface), everything runs on ${env.defaultServer}: Opsmira itself runs in a container there, so that is the machine the owner means. Pass server "local" only for the container itself.`
-    : "Without server, commands run on this server.";
+  const where = dflt
+    ? `The owner has selected ${dflt}: without server (and without host for show_surface), everything runs there. Pass server "local" only for the machine Opsmira itself runs on.`
+    : "Without server, commands run on this server (the one Opsmira runs on).";
   return `\n\nConnected servers (besides the one you run on):\n${lines.join("\n")}\nTo read one, call show_surface with host set to its name. To run commands on one that allows commands, pass server to inspect or propose_action. ${where} Never write ssh commands for these.`;
 }
 
@@ -428,8 +433,9 @@ export async function runTurn(
   onEvent,
   model,
   pendingApprovals,
-  { signal, steers = [], vision = false, fullAccess = false } = {},
+  { signal, steers = [], vision = false, fullAccess = false, server: selectedServer } = {},
 ) {
+  const dflt = defaultFor(selectedServer);
   const memories = readMemory();
   const memoryNote = memories.length
     ? `\n\nNotes you saved in earlier conversations (id: note):\n${memories.map((m) => `- ${m.id}: ${m.text}`).join("\n")}`
@@ -439,7 +445,7 @@ export async function runTurn(
   const artifactNote = artifacts.length
     ? `\n\nSaved artifacts (id: title). Bodies are not shown; call load_artifact to read one:\n${artifacts.map((a) => `- ${a.id}: ${a.title}`).join("\n")}`
     : "\n\nYou have no saved artifacts yet.";
-  const systemPrompt = SYSTEM_PROMPT + (fullAccess ? FULL_ACCESS_NOTE : "") + serversNote() + memoryNote + artifactNote;
+  const systemPrompt = SYSTEM_PROMPT + (fullAccess ? FULL_ACCESS_NOTE : "") + serversNote(dflt) + memoryNote + artifactNote;
   const messages = [{ role: "system", content: systemPrompt }, ...toModelMessages(conversation, vision)];
   let tokenCap = maxTokens();
   let creditRetry = false;
@@ -616,7 +622,7 @@ export async function runTurn(
 
       if (call.function?.name === "inspect") {
         const command = typeof parsed.command === "string" ? parsed.command.trim() : "";
-        const target = targetServer(parsed.server);
+        const target = targetServer(parsed.server, dflt);
         if (!command) {
           result = { error: "invalid arguments: a non-empty command string is required." };
         } else if (target.error) {
@@ -663,7 +669,7 @@ export async function runTurn(
         } else {
           const read = await collectSurface(scene, {
             target: typeof parsed.target === "string" && parsed.target.trim() ? parsed.target.trim() : undefined,
-            host: pickServer(parsed.host) || undefined,
+            host: pickServer(parsed.host, dflt) || undefined,
           });
           sceneShown = true;
           if (read.ok) {
@@ -765,7 +771,7 @@ export async function runTurn(
         }
       } else if (call.function?.name === "propose_action") {
         const command = typeof parsed.command === "string" ? parsed.command.trim() : "";
-        const target = targetServer(parsed.server);
+        const target = targetServer(parsed.server, dflt);
         if (!command || typeof parsed.title !== "string" || !parsed.title.trim()) {
           result = { error: "invalid arguments: command and title are required." };
         } else if (target.error) {

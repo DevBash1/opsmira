@@ -88,7 +88,7 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
                 {a.name}
                 <span className="font-sans text-[10.5px] text-[var(--muted)]">
                   {a.hostname && a.hostname !== a.name ? ` · ${a.hostname}` : ""}
-                  {a.access === "full" ? " · full access" : ""}
+                  {a.access === "operate" || a.access === "full" ? " · can run commands" : " · read-only"}
                   {a.online ? "" : " · offline"}
                 </span>
               </button>

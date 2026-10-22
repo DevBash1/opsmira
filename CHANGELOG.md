@@ -18,6 +18,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   blocked for 10 minutes after 5 failed attempts.
 
 ### Added
+- A server switcher in the composer, shown once another server is connected. The choice applies to the agent's
+  commands and to the surfaces, and is remembered.
 - `OPSMIRA_DEFAULT_SERVER` for installs inside a container: commands and surfaces run on that connected server unless
   another is named (`local` means the container itself).
 - The agent installer can download a private, checksum-verified Node 22 (`--install-node`, now part of the command the
