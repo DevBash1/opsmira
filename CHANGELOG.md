@@ -6,6 +6,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- The agent installer no longer picks a snap-packaged Node (it cannot run as a service and crash-looped); it uses
+  `--install-node`'s private Node 22 instead.
 - A reasoning model that used up its reply budget thinking no longer ends the turn with "I stopped before finishing":
   the round is retried with more room. Tool calls a model writes into its reply as markup are run instead of shown.
 

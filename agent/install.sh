@@ -58,7 +58,9 @@ case "$ACCESS" in read-only|operate) ;; *) die "--access must be read-only or op
 case "$RUN_AS" in *[!a-zA-Z0-9._-]*|"") die "--run-as has characters that are not allowed" ;; esac
 [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || die "run as root (sudo), or add --dry-run to see the steps"
 command -v systemctl >/dev/null 2>&1 || die "this needs systemd. Run the agent by hand instead: node opsmira-agent.mjs --server ... --token ..."
-node_ok() { [ -x "$1" ] && [ "$("$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)" -ge 22 ]; }
+# A snap-packaged Node cannot run as a system service (snap-confine needs privileges the service lacks), so it never counts.
+is_snap() { case "$1" in /snap/*|*/snap/bin/*) return 0 ;; esac; case "$(readlink -f "$1" 2>/dev/null)" in /snap/*|*/snap) return 0 ;; esac; return 1; }
+node_ok() { ! is_snap "$1" && [ -x "$1" ] && [ "$("$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)" -ge 22 ]; }
 NEED_NODE=0
 if [ -n "$NODE_BIN" ]; then
   node_ok "$NODE_BIN" || die "$NODE_BIN is not Node 22 or newer"
@@ -68,7 +70,8 @@ elif [ "$INSTALL_NODE" = 1 ]; then
   NEED_NODE=1
   NODE_BIN="$DIR/node/bin/node"
 else
-  die "Node 22 or newer is required (found: $(node -v 2>/dev/null || echo none)). Install it, or add --install-node to download one for the agent only."
+  SNAPNOTE=""; if command -v node >/dev/null 2>&1 && is_snap "$(command -v node)"; then SNAPNOTE=" The Node here is a snap, which cannot run as a service."; fi
+  die "Node 22 or newer is required (found: $(node -v 2>/dev/null || echo none)).$SNAPNOTE Install one, or add --install-node to download one for the agent only."
 fi
 command -v curl >/dev/null 2>&1 || die "curl is required"
 
