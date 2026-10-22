@@ -103,7 +103,7 @@ infrastructure). The AGPL repository never needs billing code in it.
   the `Store`/`Auth`/`Machine` interfaces and a network API, so it is a separate program.
 - **CLA vs DCO:** a CLA (lets us relicense or ship
   commercial features in the combined work) or only a DCO sign-off (lighter, but no relicensing).
-  Decided: CLA (`CLA.md`, draft pending legal review, enforced by `.github/workflows/cla.yml`).
+  Decided: CLA (`CLA.md`), but it is switched off (`.github/workflows/cla.yml`) until a lawyer has reviewed it. Until then outside contributions arrive under the AGPL only, which limits relicensing them later.
 
 ## Progress
 

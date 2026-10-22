@@ -27,7 +27,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
   Revoke it from the Surfaces menu.
 - Commands on connected servers: with `--access operate` the AI can inspect and propose changes on an agent
   (`server` on `inspect` and `propose_action`), with the usual approvals, audit entries and Stop.
-- CLA and sign-in workflow for outside contributions (`CLA.md` is a draft pending legal review).
+- CLA and sign-in workflow for outside contributions (`CLA.md` is a draft pending legal review). The workflow is switched off until the review is done.
 
 ## [0.1.0] - 2026-10-21
 

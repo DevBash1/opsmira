@@ -155,7 +155,7 @@ npm run check                      # typecheck + server tests
 ```
 
 Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
-Pull requests need to agree to the [CLA](CLA.md). Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+Contributions are accepted under the project license (AGPL-3.0). Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ## Safety
 

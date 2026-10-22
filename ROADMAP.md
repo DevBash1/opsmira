@@ -20,5 +20,5 @@ server to your account.
 
 ## Project
 
-- [x] Contributor agreement: CLA with a sign-in bot (`CLA.md` is a draft, needs legal review before going public)
+- [ ] Contributor agreement: a CLA bot is written but switched off (`CLA.md` is a draft that needs a legal review first)
 - [ ] Make the repository public
