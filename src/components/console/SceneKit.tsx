@@ -2,6 +2,8 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode }
 import { Icon, type IconName } from "../Icons";
 import { AutoHeight, Collapse } from "./Collapse";
 import { AnimatedValue, CountUp } from "./CountUp";
+import { CopyButton } from "../CopyButton";
+import { guessLanguage, highlightLine, type Language } from "../../lib/highlight";
 
 /* Motion: blocks of a scene are staggered by the `.scene-stagger` wrapper (index.css); inside them,
  * rows fade in one after another, rings draw, bars grow and numbers count up. Every entrance uses a
@@ -565,13 +567,17 @@ export function CodePanel({
   status,
   lines,
   footer,
+  language,
 }: {
   title: ReactNode;
   meta?: ReactNode;
   status?: { text: string; tone: Tone };
   lines: { n: number; text: string; tone?: "error" | "muted"; active?: boolean }[];
   footer?: ReactNode;
+  /** Highlighting; guessed from the title and the text when left out. */
+  language?: Language;
 }) {
+  const lang = language ?? guessLanguage(lines.map((l) => l.text), typeof title === "string" ? title : undefined);
   return (
     <Panel className="flex w-full flex-col overflow-hidden">
       <div className="flex w-full flex-row items-center justify-between gap-[12px] border-b border-[var(--hairline)] px-[16px] py-[10px]">
@@ -579,7 +585,10 @@ export function CodePanel({
           <span className="font-code truncate text-[11.5px] text-[var(--muted)]">{title}</span>
           {meta && <span className="font-code text-[10px] text-[var(--muted)]">· {meta}</span>}
         </div>
-        {status && <Tag tone={status.tone}>{status.text}</Tag>}
+        <div className="flex shrink-0 flex-row items-center gap-[8px]">
+          {status && <Tag tone={status.tone}>{status.text}</Tag>}
+          <CopyButton text={lines.map((l) => l.text).join("\n")} label="Copy code" />
+        </div>
       </div>
       <div className="flex w-full flex-col py-[6px]">
         {lines.map((l, i) => (
@@ -594,7 +603,7 @@ export function CodePanel({
                 l.tone === "error" ? "text-[var(--accent-strong)]" : l.tone === "muted" ? "text-[var(--muted)]" : "text-[var(--ink)]"
               }`}
             >
-              {l.text}
+              {l.tone ? l.text : highlightLine(l.text, lang)}
             </span>
           </div>
         ))}

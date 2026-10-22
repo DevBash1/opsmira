@@ -1,5 +1,16 @@
+import { Children, isValidElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { CopyButton } from "./CopyButton";
+import { guessLanguage, highlightLine, languageFrom } from "../lib/highlight";
+
+/** The text of a fenced block and the language it was labelled with, from the <code> react-markdown nests in <pre>. */
+function codeOf(children: ReactNode): { text: string; label?: string } {
+  const child = Children.toArray(children).find(isValidElement) as { props: { className?: string; children?: ReactNode } } | undefined;
+  const raw = child ? child.props.children : children;
+  const text = (Array.isArray(raw) ? raw.join("") : String(raw ?? "")).replace(/\n$/, "");
+  return { text, label: /language-([\w+-]+)/.exec(child?.props.className ?? "")?.[1] };
+}
 
 const components: Components = {
   p: ({ children }) => <p className="text-[16px]/[26px] text-[var(--ink)]">{children}</p>,
@@ -35,11 +46,19 @@ const components: Components = {
       <code className="font-code rounded-[4px] bg-[var(--soft)] p-[2px_6px] text-[0.9em] text-[var(--accent-strong)]">{children}</code>
     );
   },
-  pre: ({ children }) => (
-    <pre className="theme-dark font-code max-w-full overflow-x-auto rounded-[10px] bg-[var(--surface)] p-[12px_14px] text-[13px]/[20px] text-[var(--ink)] [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => {
+    const { text, label } = codeOf(children);
+    const lines = text.split("\n");
+    const lang = languageFrom(label) ?? guessLanguage(lines);
+    return (
+      <div className="theme-dark group/code relative w-full max-w-full rounded-[10px] bg-[var(--surface)] [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]">
+        <CopyButton text={text} label="Copy code" className="absolute top-[6px] right-[6px] z-[1] bg-[var(--surface)]" />
+        <pre className="font-code max-w-full p-[12px_40px_12px_14px] text-[13px]/[20px] whitespace-pre-wrap text-[var(--ink)] [overflow-wrap:anywhere]">
+          <code>{lines.map((l, i) => (<span key={i} className="block min-h-[20px]">{highlightLine(l, lang)}</span>))}</code>
+        </pre>
+      </div>
+    );
+  },
   table: ({ children }) => (
     <div className="w-full max-w-full overflow-x-auto rounded-[10px] [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]">
       <table className="w-full min-w-[420px] border-collapse text-[13px]/[20px] text-[var(--ink)]">{children}</table>

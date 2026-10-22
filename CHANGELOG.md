@@ -16,6 +16,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
   blocked for 10 minutes after 5 failed attempts.
 
 ### Added
+- Code in the console (command panels and code blocks in replies) is syntax highlighted and has a copy button.
 - Sign out button in the console. Signing out now revokes the session, so a copied cookie stops working.
 - An install script (`public/install.sh`): Docker or a native systemd service, asks for the key, prints the
   sign-in details, upgrades by re-running, `--uninstall` to remove.

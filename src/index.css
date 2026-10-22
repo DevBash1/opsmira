@@ -18,6 +18,17 @@
   --shadow: #1f3a2a1f;
   --hairline: #20302814;
   --danger: #c2412d;
+  /* Code highlighting (src/lib/highlight.tsx) */
+  --tok-comment: #7b8880;
+  --tok-string: #9a5a1c;
+  --tok-keyword: #86409c;
+  --tok-command: #1f5e40;
+  --tok-flag: #1d6a87;
+  --tok-variable: #a3316a;
+  --tok-number: #ad5810;
+  --tok-key: #2a5aa8;
+  --tok-operator: #66746c;
+  --tok-path: #3d6b52;
   /* How strongly the console aurora shows through (dimmer on dark canvases). */
   --aurora-strength: 1;
   /* Native controls (the model <select>, scrollbars) follow the theme. */
@@ -42,6 +53,16 @@
   --shadow: #00000080;
   --hairline: #ffffff14;
   --danger: #f08a80;
+  --tok-comment: #72857a;
+  --tok-string: #e6b673;
+  --tok-keyword: #d2a2ee;
+  --tok-command: #b5efcb;
+  --tok-flag: #7fd0e6;
+  --tok-variable: #f0a0c8;
+  --tok-number: #f0b27a;
+  --tok-key: #8db8f5;
+  --tok-operator: #96a59b;
+  --tok-path: #a9d9bd;
   --aurora-strength: 0.6;
   color-scheme: dark;
 }
