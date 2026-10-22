@@ -299,6 +299,8 @@ const MAX_ROUNDS = Math.max(4, Number(process.env.OPSMIRA_MAX_ROUNDS) || 30);
 // Each steering message buys two more rounds, never past this.
 const MAX_ROUNDS_WITH_STEERING = MAX_ROUNDS + 12;
 const DEFAULT_MAX_TOKENS = 1024;
+/** What one reply may use after a reasoning model spent a smaller budget thinking. */
+const MAX_REASONING_TOKENS = 8192;
 
 function maxTokens() {
   const configured = Number(process.env.OPSMIRA_MAX_TOKENS);
@@ -491,11 +493,19 @@ export async function runTurn(
     let calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
     let text = typeof msg.content === "string" ? msg.content : "";
 
+    if (calls.length === 0 && !text.trim() && choice.finish_reason === "length" && tokenCap < MAX_REASONING_TOKENS && !signal?.aborted) {
+      // A reasoning model spent the whole budget thinking and never got to answer or call a tool: run the
+      // round again with room for both (a 402 still lowers it to what the account can afford).
+      tokenCap = Math.min(tokenCap * 4, MAX_REASONING_TOKENS);
+      round--;
+      continue;
+    }
+
     if (calls.length === 0) {
       // A reply cut off by the token cap would "stop halfway": continue it. Markup for a tool call is not
       // prose, so a cut-off one is not continued (the call, if it can be read, is run below).
       let finish = choice.finish_reason;
-      for (let extra = 0; finish === "length" && extra < 3 && !signal?.aborted && !/DSML/.test(text); extra++) {
+      for (let extra = 0; finish === "length" && extra < 3 && !signal?.aborted && text.trim() && !/DSML/.test(text); extra++) {
         onEvent({ type: "status", text: "finishing" });
         try {
           const continuation = await client.chat.completions.create(
@@ -533,6 +543,11 @@ export async function runTurn(
 
     if (calls.length === 0) {
       const raw = text.trim();
+      if (!raw) {
+        // Say what the model sent instead, so an empty reply can be told apart from one that hid its answer elsewhere.
+        const { content, tool_calls, ...rest } = msg;
+        console.warn(`[ai] empty reply from ${model || env.model}: finish=${choice.finish_reason} content=${JSON.stringify(content)} fields=${JSON.stringify(rest).slice(0, 600)}`);
+      }
       // Models sometimes end a turn with nothing, or with "Now let me check..." and no tool call. That is
       // the agent stopping halfway: nudge it to carry on (twice at most) instead of leaving the owner hanging.
       const unfinished =

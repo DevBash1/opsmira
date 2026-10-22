@@ -20,6 +20,11 @@ const fake = http.createServer((req, res) => {
     const last = String(j.messages?.at(-1)?.content ?? "");
     let message = { role: "assistant", content: "The hostname is shown above." };
     let finish = "stop";
+    if (mode === "reasoning" && Number(j.max_tokens) < 4000) {
+      // Like a reasoning model whose thinking used the whole budget: no content, no tool call.
+      res.setHeader("content-type", "application/json");
+      return res.end(JSON.stringify({ id: "x", object: "chat.completion", created: 1, model: "fake", choices: [{ index: 0, message: { role: "assistant", content: null, reasoning: "thinking..." }, finish_reason: "length" }] }));
+    }
     if (!answered) {
       if (mode === "late" && last.startsWith("Continue")) message.content = MARKUP;
       else if (mode === "late") [message.content, finish] = ["Checking.", "length"];
@@ -61,6 +66,13 @@ async function ask(id) {
   for (const chunk of (await res.text()).split("\n\n")) if (chunk.startsWith("data: ")) events.push(JSON.parse(chunk.slice(6)));
   return events;
 }
+
+test("a reply emptied by reasoning is retried with a bigger budget instead of stopping", async () => {
+  mode = "reasoning";
+  const events = await ask("flow-reasoning");
+  const text = events.filter((e) => e.type === "message").map((e) => e.text).join(" ");
+  assert.equal(text, "The hostname is shown above.");
+});
 
 for (const m of ["stop", "late"]) {
   test(`markup tool call (${m}) is run and never shown`, async () => {
