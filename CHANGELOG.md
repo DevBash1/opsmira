@@ -16,6 +16,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   blocked for 10 minutes after 5 failed attempts.
 
 ### Added
+- `OPSMIRA_DEFAULT_SERVER` for installs inside a container: commands and surfaces run on that connected server unless
+  another is named (`local` means the container itself).
 - The agent installer can download a private, checksum-verified Node 22 (`--install-node`, now part of the command the
   console shows) so servers with an older Node can connect without touching the system Node.
 - Code in the console (command panels and code blocks in replies) is syntax highlighted and has a copy button.

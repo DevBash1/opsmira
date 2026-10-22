@@ -93,6 +93,8 @@ Open **Surfaces**, choose **Connect a server**, and run the command it shows on 
 It installs `opsmira-agent` as a systemd service that dials out to the console, so the server needs no open
 port and you hand over no key. Prefer not to install anything? The panel also has a "just run it once" command.
 
+**Running in a container (Docker, Kubernetes)?** "This server" is then only the container, so install the agent on the host as above and set `OPSMIRA_DEFAULT_SERVER=agent:<name>`. Commands and surfaces then go to the host by default; the agent can still reach the container by naming `local`.
+
 - **Pairing:** the command carries a one-time token that expires in an hour. After pairing, the agent keeps a
   long-lived credential in its state file (mode 0600); the console stores only a hash of it.
 - **Reconnects** by itself. **Remove** in the Surfaces menu revokes it at once and the agent stops.

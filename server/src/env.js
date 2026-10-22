@@ -71,6 +71,8 @@ export const env = {
   agentDir: join(SERVER_DIR, "..", "agent"),
   /** Also serve the marketing pages. Off by default: a self-hosted install opens straight into the console. */
   site: truthy(process.env.OPSMIRA_SITE),
+  /** A connected server (agent:name) that commands and surfaces use unless one is named. For installs inside a container, where "this server" is only the container. */
+  defaultServer: (process.env.OPSMIRA_DEFAULT_SERVER ?? "").trim().slice(0, 160),
   /** Behind a reverse proxy that terminates TLS: trust X-Forwarded-* so cookies are marked secure. */
   trustProxy: truthy(process.env.OPSMIRA_TRUST_PROXY),
 };

@@ -147,14 +147,25 @@ const SURFACE_TOOL = {
 };
 
 const SERVER_PARAM =
-  "Optional. A connected server to run this on, as shown in your prompt (for example agent:web-1). Leave it out to run on the server Opsmira itself is on.";
+  "Optional. A connected server to run this on, as shown in your prompt (for example agent:web-1). " +
+  (env.defaultServer
+    ? `Leave it out to run on ${env.defaultServer}. Use "local" only for the container Opsmira itself runs in.`
+    : "Leave it out to run on the server Opsmira itself is on.");
+
+/** The server a call names, with the configured default filled in. "local" means Opsmira's own machine (or container). */
+export function pickServer(raw, defaultServer = env.defaultServer) {
+  const named = typeof raw === "string" ? raw.trim() : "";
+  if (named === "local") return "";
+  return named || defaultServer || "";
+}
 
 /**
  * The connected server a call targets: { name } (or {} for this server), or { error } to hand back to the model.
  * Commands only run on a server that is online and was started to allow commands.
  */
-function targetServer(raw) {
-  if (raw === undefined || raw === null || raw === "") return {};
+function targetServer(asked) {
+  const raw = pickServer(asked);
+  if (!raw) return {};
   const host = typeof raw === "string" ? raw.trim() : "";
   const name = host.startsWith(AGENT_PREFIX) ? host.slice(AGENT_PREFIX.length) : "";
   const known = listAgents().map((a) => a.host);
@@ -162,7 +173,7 @@ function targetServer(raw) {
     return { error: `unknown server "${String(raw).slice(0, 60)}". Connected servers: ${known.join(", ") || "none"}. Leave server out to run on this server.` };
   }
   const access = agentAccess(name);
-  if (!access) return { error: `${host} is not connected right now.` };
+  if (!access) return { error: `${host} is not connected right now.${host === env.defaultServer ? ' It is the default server; pass server "local" to use the container Opsmira runs in instead.' : ""}` };
   if (access !== "operate") {
     return { error: `${host} is read-only: it was started without --access operate, so commands cannot run there. Surfaces (show_surface with host: "${host}") still work. Tell the owner how to allow commands if they need it.` };
   }
@@ -174,7 +185,10 @@ function serversNote() {
   const agents = listAgents();
   if (!agents.length) return "";
   const lines = agents.map((a) => `- ${a.host}: ${a.online ? "online" : "offline"}${a.online ? (a.access === "operate" ? ", commands allowed" : ", read-only (surfaces only)") : ""}${a.hostname ? `, hostname ${a.hostname}` : ""}`);
-  return `\n\nConnected servers (besides the one you run on):\n${lines.join("\n")}\nTo read one, call show_surface with host set to its name. To run commands on one that allows commands, pass server to inspect or propose_action. Without server, commands run on this server. Never write ssh commands for these.`;
+  const where = env.defaultServer
+    ? `Without server (and without host for show_surface), everything runs on ${env.defaultServer}: Opsmira itself runs in a container there, so that is the machine the owner means. Pass server "local" only for the container itself.`
+    : "Without server, commands run on this server.";
+  return `\n\nConnected servers (besides the one you run on):\n${lines.join("\n")}\nTo read one, call show_surface with host set to its name. To run commands on one that allows commands, pass server to inspect or propose_action. ${where} Never write ssh commands for these.`;
 }
 
 const TOOLS = [
@@ -649,7 +663,7 @@ export async function runTurn(
         } else {
           const read = await collectSurface(scene, {
             target: typeof parsed.target === "string" && parsed.target.trim() ? parsed.target.trim() : undefined,
-            host: typeof parsed.host === "string" && parsed.host.trim() ? parsed.host.trim() : undefined,
+            host: pickServer(parsed.host) || undefined,
           });
           sceneShown = true;
           if (read.ok) {

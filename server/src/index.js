@@ -16,7 +16,7 @@ import {
   isAuthenticated,
   sessionIdFromRequest,
 } from "./auth.js";
-import { runTurn } from "./ai.js";
+import { pickServer, runTurn } from "./ai.js";
 import { getModels, getModelInfo } from "./models.js";
 import { contentImages, contentText, parseUserInput, userContent } from "./content.js";
 import { runCommand } from "./exec.js";
@@ -166,7 +166,7 @@ app.get("/api/hosts", (req, res) => {
 
 app.get("/api/surfaces/:id", async (req, res) => {
   const target = typeof req.query.target === "string" && req.query.target ? req.query.target.slice(0, 300) : undefined;
-  const host = typeof req.query.host === "string" && req.query.host ? req.query.host.slice(0, 160) : undefined;
+  const host = pickServer(typeof req.query.host === "string" ? req.query.host.slice(0, 160) : "") || undefined;
   const read = await collectSurface(req.params.id, { target, host });
   if (read.ok) res.json({ scene: read.scene, data: read.data });
   else res.json({ scene: "unavailable", data: { for: read.scene ?? req.params.id, reason: read.reason, hint: read.hint, ...(read.ssh ? { ssh: read.ssh } : {}) } });
