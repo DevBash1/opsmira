@@ -411,10 +411,19 @@ function ThoughtLine({ thoughts, live, open, onToggle }: { thoughts: string[]; l
   const text = thoughts.join("\n\n").replace(/\*\*/g, "");
   const preview = lastThoughtLine(thoughts.at(-1)?.replace(/\*\*/g, "") ?? "");
   const body = useRef<HTMLDivElement>(null);
+  // Fade an edge only while there is more text past it, so the last line is never dimmed.
+  const [fade, setFade] = useState({ top: false, bottom: false });
+  const measure = () => {
+    const el = body.current;
+    if (!el) return;
+    const next = { top: el.scrollTop > 2, bottom: el.scrollHeight - el.clientHeight - el.scrollTop > 2 };
+    setFade((f) => (f.top === next.top && f.bottom === next.bottom ? f : next));
+  };
 
   // While it is still thinking and open, keep the newest words in view.
   useEffect(() => {
     if (live && open && body.current) body.current.scrollTop = body.current.scrollHeight;
+    measure();
   }, [text, live, open]);
 
   return (
@@ -439,7 +448,9 @@ function ThoughtLine({ thoughts, live, open, onToggle }: { thoughts: string[]; l
           <motion.div key="thought" {...collapseY(reduce)} className="w-full">
             <div
               ref={body}
-              className="mt-[4px] max-h-[220px] w-full overflow-x-hidden overflow-y-auto pl-[20px] text-[12.5px]/[20px] [overflow-wrap:anywhere] whitespace-pre-wrap text-[var(--muted)] [scrollbar-width:none] [mask-image:linear-gradient(to_bottom,transparent,#000_10px,#000_calc(100%-32px),transparent)] [&::-webkit-scrollbar]:hidden"
+              onScroll={measure}
+              style={{ maskImage: `linear-gradient(to bottom, ${fade.top ? "transparent, #000 14px" : "#000, #000"}, ${fade.bottom ? "#000 calc(100% - 28px), transparent" : "#000, #000"})` }}
+              className="mt-[4px] max-h-[220px] w-full overflow-x-hidden overflow-y-auto pl-[20px] text-[12.5px]/[20px] [overflow-wrap:anywhere] whitespace-pre-wrap text-[var(--muted)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {text}
             </div>
