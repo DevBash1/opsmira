@@ -302,7 +302,8 @@ function startApp(opts) {
     log(`could not start the app: ${err.message}`);
     process.exit(127);
   });
-  child.on("exit", (code, signal) => {
+  // "close", not "exit": the app's last output (what it wrote as it died) has been read by then.
+  child.on("close", (code, signal) => {
     opts.stop = true;
     try {
       opts.socket?.close();

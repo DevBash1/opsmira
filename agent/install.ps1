@@ -64,7 +64,7 @@ if (-not $node) {
   $nodeDir = Join-Path $Dir "node"
   Remove-Item -Recurse -Force $nodeDir -ErrorAction SilentlyContinue
   Expand-Archive $zip -DestinationPath $Dir -Force
-  Rename-Item (Join-Path $Dir "node-$NodeVersion-win-$arch") $nodeDir
+  Rename-Item (Join-Path $Dir "node-$NodeVersion-win-$arch") -NewName "node"
   Remove-Item $zip -Force
   $node = Join-Path $nodeDir "node.exe"
 }

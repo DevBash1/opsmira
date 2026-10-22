@@ -177,7 +177,7 @@ app.post("/api/agents/credential", (req, res) => {
     credential,
     env: `OPSMIRA_CREDENTIAL=${credential}`,
     build: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs`,
-    start: `node opsmira-agent.mjs --server ${ws} --name ${name}${access} --exec "<your start command>"`,
+    start: `node opsmira-agent.mjs --server ${ws} --exec "<your start command>"`,
   });
 });
 

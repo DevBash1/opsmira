@@ -119,7 +119,7 @@ Choose **Windows** in the Connect panel and run the command it shows in a PowerS
 There is no systemd and no root there, and the disk resets on every deploy, so the installer does not apply. Choose **Hosted app** in the Connect panel instead: it makes a credential you put in the platform's environment variables (`OPSMIRA_CREDENTIAL`), and shows a build step and a start command. Your app then runs *under* the agent:
 
 ```
-node opsmira-agent.mjs --server wss://CONSOLE/api/agent/connect --name my-api --exec "npm start"
+node opsmira-agent.mjs --server wss://CONSOLE/api/agent/connect --exec "npm start"
 ```
 
 - The credential is long-lived and reused on every deploy and restart, so the app comes back as the same server in the console. It is shown once; keep it like a password. Remove the server in the console to revoke it.
