@@ -489,22 +489,13 @@ export async function runTurn(
     const choice = completion.choices[0];
     let msg = choice.message;
     let calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
-    if (calls.length === 0) {
-      // A model that wrote its tool call into the reply as markup: run it, and never show the markup.
-      const recovered = recoverTextToolCalls(msg.content);
-      if (recovered.calls.length) {
-        calls = recovered.calls;
-        msg = { role: "assistant", content: recovered.text || null, tool_calls: calls };
-      } else if (recovered.text !== msg.content) {
-        msg = { ...msg, content: recovered.text };
-      }
-    }
+    let text = typeof msg.content === "string" ? msg.content : "";
 
     if (calls.length === 0) {
-      // A reply cut off by the token cap would "stop halfway" — continue it.
-      let text = msg.content || "";
+      // A reply cut off by the token cap would "stop halfway": continue it. Markup for a tool call is not
+      // prose, so a cut-off one is not continued (the call, if it can be read, is run below).
       let finish = choice.finish_reason;
-      for (let extra = 0; finish === "length" && extra < 3 && !signal?.aborted; extra++) {
+      for (let extra = 0; finish === "length" && extra < 3 && !signal?.aborted && !/DSML/.test(text); extra++) {
         onEvent({ type: "status", text: "finishing" });
         try {
           const continuation = await client.chat.completions.create(
@@ -531,6 +522,16 @@ export async function runTurn(
         }
       }
 
+      // A model that wrote its tool call into the reply as markup: run it, and never show the markup.
+      const recovered = recoverTextToolCalls(text);
+      text = recovered.text;
+      if (recovered.calls.length) {
+        calls = recovered.calls;
+        msg = { role: "assistant", content: recovered.text || null, tool_calls: calls };
+      }
+    }
+
+    if (calls.length === 0) {
       const raw = text.trim();
       // Models sometimes end a turn with nothing, or with "Now let me check..." and no tool call. That is
       // the agent stopping halfway: nudge it to carry on (twice at most) instead of leaving the owner hanging.
