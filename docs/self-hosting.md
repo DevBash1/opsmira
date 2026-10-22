@@ -120,11 +120,13 @@ Choose **Windows** in the Connect panel and run the command it shows in a PowerS
 
 ### Hosted platforms (Heroku, Railway, Pxxl, Render and similar)
 
-There is no systemd and no root there, and the disk resets on every deploy, so the installer does not apply. Choose **Hosted app** in the Connect panel instead: it makes a credential you put in the platform's environment variables (`OPSMIRA_CREDENTIAL`), and shows a build step and a start command. Your app then runs *under* the agent:
+There is no systemd and no root there, and the disk resets on every deploy, so the installer does not apply. Choose **Hosted app** in the Connect panel instead: it makes a credential and gives you one command to use as the platform's start command, with your own start command in the quotes. Your app then runs *under* the agent:
 
 ```
-node opsmira-agent.mjs --server wss://CONSOLE/api/agent/connect --exec "npm start"
+curl -fsSL https://CONSOLE/agent/opsmira-agent.mjs -o opsmira-agent.mjs && OPSMIRA_CREDENTIAL=ops_agent_... node opsmira-agent.mjs --server wss://CONSOLE/api/agent/connect --exec "npm start"
 ```
+
+The credential sits in that command; if the platform has a secret environment variable setting, move `OPSMIRA_CREDENTIAL` there and drop it from the command.
 
 - The credential is long-lived and reused on every deploy and restart, so the app comes back as the same server in the console. It is shown once; keep it like a password. Remove the server in the console to revoke it.
 - The app's output goes to the platform's own logs as before, and is also copied to a log file (`OPSMIRA_APP_LOG`, default `/tmp/opsmira-app.log`, kept to its last 512 KB) that the AI can tail.

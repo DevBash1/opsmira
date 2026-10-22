@@ -171,13 +171,11 @@ app.post("/api/agents/credential", (req, res) => {
   const origin = `${req.protocol}://${req.get("host")}`;
   const ws = origin.replace(/^http/, "ws") + AGENT_PATH;
   const access = req.body?.access === "operate" ? " --access operate" : "";
+  // One line for the platform's start command: fetch the agent, then run the app under it.
   res.json({
     name,
     host,
-    credential,
-    env: `OPSMIRA_CREDENTIAL=${credential}`,
-    build: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs`,
-    start: `node opsmira-agent.mjs --server ${ws} --exec "<your start command>"`,
+    command: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs && OPSMIRA_CREDENTIAL=${credential} node opsmira-agent.mjs --server ${ws}${access} --exec "<your start command>"`,
   });
 });
 

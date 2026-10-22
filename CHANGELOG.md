@@ -24,6 +24,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
   the round is retried with more room. Tool calls a model writes into its reply as markup are run instead of shown.
 
 ### Changed
+- The agent installer now runs the agent as the user who ran `sudo` (it used to always use a locked-down
+  `opsmira-agent` account that could not read your home directory). A root login still gets `opsmira-agent`;
+  `--run-as opsmira-agent` opts out.
 - A self-hosted server is now the console at `/` instead of `/app`. Old `/app` links redirect. With
   `OPSMIRA_SITE=1` the marketing pages stay at `/` and the console at `/app`.
 - Sign-in now takes a username (default `admin`, set with `OPSMIRA_USERNAME`) and the password, and an address is
