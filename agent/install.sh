@@ -8,7 +8,9 @@
 #   --token TOKEN    the one-time token from the console (required the first time)
 #   --name NAME      how the server is named in the console (default: this hostname)
 #   --access MODE    read-only (default) or operate (lets the console run commands here)
-#   --run-as USER    the account the agent runs as (default: opsmira-agent, created if missing)
+#   --run-as USER    the account the agent runs as. Default: the user who ran sudo, so it can see that user's
+#                    files and projects (a root login gets a dedicated opsmira-agent account instead).
+#                    --run-as opsmira-agent keeps it in a locked-down service account of its own
 #   --install-node   if this machine has no Node 22+, download one for the agent only (checksum verified,
 #                    kept in /opt/opsmira-agent/node, the system Node is left alone)
 #   --node PATH      run the agent with this Node 22+ binary
@@ -16,7 +18,7 @@
 #   --uninstall      stop and remove the service (the console entry is removed in its Surfaces menu)
 set -eu
 
-SERVER="" TOKEN="" NAME="" ACCESS="read-only" RUN_AS="opsmira-agent" DRY=0 UNINSTALL=0 INSTALL_NODE=0 NODE_BIN=""
+SERVER="" TOKEN="" NAME="" ACCESS="read-only" RUN_AS="" DRY=0 UNINSTALL=0 INSTALL_NODE=0 NODE_BIN=""
 DIR=/opt/opsmira-agent
 STATE_DIR=/var/lib/opsmira-agent
 ENV_FILE=/etc/opsmira-agent.env
@@ -55,6 +57,11 @@ fi
 [ -n "$SERVER" ] || die "--server is required"
 case "$SERVER" in ws://*|wss://*) ;; *) die "--server must start with ws:// or wss://" ;; esac
 case "$ACCESS" in read-only|operate) ;; *) die "--access must be read-only or operate" ;; esac
+# By default the agent is the person who installed it: it can then see their projects, and whatever the console
+# runs is what that person could run. A root login (no sudo user) gets a dedicated service account.
+if [ -z "$RUN_AS" ]; then
+  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && id "$SUDO_USER" >/dev/null 2>&1; then RUN_AS="$SUDO_USER"; else RUN_AS=opsmira-agent; fi
+fi
 case "$RUN_AS" in *[!a-zA-Z0-9._-]*|"") die "--run-as has characters that are not allowed" ;; esac
 [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || die "run as root (sudo), or add --dry-run to see the steps"
 command -v systemctl >/dev/null 2>&1 || die "this needs systemd. On a hosting platform (Heroku, Railway, Pxxl, ...) there is no systemd: use Connect a server > Hosted app in the console, which runs your app under the agent. Otherwise run it by hand: node opsmira-agent.mjs --server ... --token ..."
@@ -82,10 +89,16 @@ ORIGIN=$(printf '%s' "$SERVER" | sed -e 's#^wss://#https://#' -e 's#^ws://#http:
 say "Installing opsmira-agent ($ACCESS) for $ORIGIN as '$NAME', running as '$RUN_AS'."
 case "$SERVER" in ws://localhost*|ws://127.*) ;; ws://*) say "Warning: ws:// is not encrypted. Use an https:// console (wss://) so the credential is not sent in the clear." ;; esac
 
-if [ "$DRY" = 1 ] || ! id "$RUN_AS" >/dev/null 2>&1; then
+if ! id "$RUN_AS" >/dev/null 2>&1; then
   run useradd --system --home-dir "$STATE_DIR" --shell /usr/sbin/nologin "$RUN_AS"
 fi
 run mkdir -p "$DIR" "$STATE_DIR"
+# A real person's account keeps its own home (so ~ and their projects are where they expect); a service account uses the state directory.
+AGENT_HOME="$STATE_DIR"
+if id "$RUN_AS" >/dev/null 2>&1; then
+  USER_HOME="$(getent passwd "$RUN_AS" | cut -d: -f6)"
+  case "$RUN_AS" in opsmira-agent) ;; *) [ -n "$USER_HOME" ] && [ -d "$USER_HOME" ] && AGENT_HOME="$USER_HOME" ;; esac
+fi
 if [ "$NEED_NODE" = 1 ]; then
   if [ "$DRY" = 1 ]; then
     say "+ download Node 22 (checksum verified) into $DIR/node"
@@ -131,7 +144,7 @@ Wants=network-online.target
 [Service]
 User=$RUN_AS
 EnvironmentFile=$ENV_FILE
-Environment=HOME=$STATE_DIR
+Environment=HOME=$AGENT_HOME
 ExecStart=$NODE_BIN $DIR/opsmira-agent.mjs --name $NAME --access $ACCESS --state $STATE_DIR/state.json
 Restart=always
 RestartSec=3
@@ -147,5 +160,10 @@ run systemctl enable --now opsmira-agent
 say ""
 say "Done. It should appear as 'agent:$NAME' in the console's Surfaces menu in a few seconds."
 say "Logs: journalctl -u opsmira-agent -f"
+if [ "$RUN_AS" = opsmira-agent ]; then
+  say "It runs as the service account 'opsmira-agent', which cannot read other users' home directories. Re-run with --run-as YOUR_USER to let it see your projects."
+else
+  say "It runs as '$RUN_AS', so it can see that user's files and projects. Re-run with --run-as opsmira-agent to confine it."
+fi
 [ "$ACCESS" = operate ] && say "Commands are allowed. They run as '$RUN_AS'; give that account only the access you want it to have."
 exit 0

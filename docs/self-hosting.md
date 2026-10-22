@@ -102,8 +102,12 @@ port and you hand over no key. Prefer not to install anything? The panel also ha
   nothing can change. Add `--access operate` to the command to let the console run shell commands there: the
   AI can then `inspect` it, and propose changes that wait for your approval exactly as on this server. Proposal
   cards and activity lines show which server a command targets.
-- **Runs as an unprivileged user** (`opsmira-agent`, created for you; `--run-as USER` to change it). An
-  `operate` agent can do what that user can do, so give the account only the access you want it to have.
+- **Runs as you by default.** The installer uses the account that ran `sudo`, so the agent can see your
+  projects and files, and anything the console runs is what that user could run. That includes reading that
+  user's keys and config, even in read-only mode, so only connect a console you trust. Installed from a root
+  login (no sudo user), it gets a dedicated `opsmira-agent` account instead. `--run-as opsmira-agent` confines
+  it to a service account that cannot read other users' home directories; `--run-as USER` picks any account.
+  Re-run the installer to change it.
 - **Use HTTPS (`wss://`).** Over plain `ws://` the credential crosses the network unencrypted; the installer
   and the agent both warn.
 - **Remove it:** `curl -fsSL https://CONSOLE/agent/install.sh | sudo sh -s -- --uninstall`, then Remove in the console.
