@@ -410,7 +410,7 @@ function ThoughtLine({ thoughts }: { thoughts: string[] }) {
       <AnimatePresence initial={false}>
         {open && (
           <motion.div key="thought" {...collapseY(reduce)} className="w-full">
-            <div className="mt-[6px] max-h-[240px] w-full overflow-auto border-l border-[var(--hairline)] pl-[14px] text-[12.5px]/[20px] whitespace-pre-wrap text-[var(--muted)]">
+            <div className="mt-[4px] max-h-[220px] w-full overflow-x-hidden overflow-y-auto pl-[18px] text-[12.5px]/[20px] [overflow-wrap:anywhere] whitespace-pre-wrap text-[var(--muted)] [scrollbar-width:none] [mask-image:linear-gradient(to_bottom,transparent,#000_10px,#000_calc(100%-32px),transparent)] [&::-webkit-scrollbar]:hidden">
               {thoughts.join("\n\n")}
             </div>
           </motion.div>
