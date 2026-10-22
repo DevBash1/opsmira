@@ -6,9 +6,9 @@ import { Reveal, REVEAL_BASE, revealState, stagger, useInView, usePauseOffscreen
 
 const GUARANTEES: { icon: IconName; label: string; bordered: boolean }[] = [
   { icon: "eye", label: "Read-only until you approve", bordered: true },
-  { icon: "key-round", label: "Root access scoped and revoked after each run", bordered: true },
-  { icon: "scroll-text", label: "Every action in an exportable audit trail", bordered: true },
-  { icon: "rotate-ccw", label: "One-tap rollback with a restore point", bordered: false },
+  { icon: "scroll-text", label: "Every action in an audit log", bordered: true },
+  { icon: "key-round", label: "Your server, your keys, nothing hosted", bordered: true },
+  { icon: "file-text", label: "Open source, so you can read all of it", bordered: false },
 ];
 
 export function Safety() {

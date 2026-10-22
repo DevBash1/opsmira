@@ -28,7 +28,7 @@ export function Landing({ onNavigate }: { onNavigate: (page: Page, hash?: string
       <HowItWorks />
       <Safety />
       <AskAnything />
-      <FinalCta variant="landing" />
+      <FinalCta />
     </div>
   );
 }

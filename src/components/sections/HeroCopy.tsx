@@ -2,6 +2,7 @@ import { ApprovalCard } from "../ApprovalCard";
 import { PrimaryButton, SecondaryButton } from "../Buttons";
 import { HeadlineLines } from "../HeadlineLines";
 import { Reveal } from "../Reveal";
+import { REPO_URL } from "../../lib/site";
 
 export function FloatingApproval() {
   return (
@@ -12,12 +13,12 @@ export function FloatingApproval() {
       <ApprovalCard
         status="Awaiting approval"
         timestamp="just now"
-        title="Raise Redis pool to 32"
-        context="Roll back config v2.18. Takes effect without a restart."
-        command="opsmira config rollback v2.17"
-        riskFilled={2}
-        riskLevel="Medium"
-        riskDetail="~3s downtime"
+        title="Clear the apt package cache"
+        context="Removes downloaded .deb files, about 145 MB. Installed software is not affected."
+        command="apt-get clean"
+        riskFilled={1}
+        riskLevel="Low"
+        riskDetail="re-downloads if needed"
         className="motion-safe:animate-[float-y_8s_ease-in-out_infinite] [box-shadow:0px_30px_60px_var(--shadow),0px_0px_40px_var(--glow)]"
       />
     </Reveal>
@@ -31,11 +32,11 @@ export function HeroCopy() {
         <div className="flex w-fit max-w-full shrink-0 flex-row items-center justify-start gap-[10px] rounded-full bg-[var(--glass)] p-[7px_14px_7px_8px] [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]">
           <div className="flex w-fit shrink-0 flex-row items-start justify-start gap-0 rounded-full bg-[linear-gradient(90deg,var(--accent)_0%,var(--accent-2)_100%)] p-[3px_9px]">
             <div className="font-code text-[10px] font-semibold tracking-[1px] whitespace-nowrap text-[var(--canvas)]">
-              NEW
+              OPEN SOURCE
             </div>
           </div>
           <div className="text-center text-[12px] text-[var(--muted)] md:text-[13px] md:whitespace-nowrap">
-            Live UI that rebuilds itself while Opsmira works
+            Self-hosted, AGPL-3.0, bring your own model
           </div>
         </div>
       </Reveal>
@@ -53,14 +54,14 @@ export function HeroCopy() {
 
       <Reveal delay={420}>
         <div className="flex w-fit shrink-0 flex-row flex-wrap items-center justify-center gap-[10px] p-[10px_0px_0px_0px] md:gap-[14px]">
-          <PrimaryButton>Connect a server</PrimaryButton>
-          <SecondaryButton icon="play">Watch 90s demo</SecondaryButton>
+          <PrimaryButton href="#install">Install it</PrimaryButton>
+          <SecondaryButton href={REPO_URL}>View on GitHub</SecondaryButton>
         </div>
       </Reveal>
 
       <Reveal delay={520}>
         <div className="font-code px-2 text-center text-[11px] tracking-[0.2px] text-[var(--muted)] md:text-[12px] md:whitespace-nowrap">
-          Free for one server · Ubuntu, Debian, Docker, any VPS · 2-minute install
+          Free and open source · Linux, Docker, any VPS · one command to install
         </div>
       </Reveal>
     </div>

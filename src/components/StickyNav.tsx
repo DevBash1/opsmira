@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icons";
 import { NavCta } from "./Buttons";
-import { LINKS } from "./Nav";
+import { LINKS, outbound } from "./Nav";
 import type { Page } from "./Nav";
 
 const SHOW_AFTER = 520;
@@ -48,12 +48,10 @@ export function StickyNav({ page, onNavigate }: { page: Page; onNavigate: (page:
   }, [page]);
 
   const go = (e: React.MouseEvent, href: string) => {
+    if (!href.startsWith("#")) return;
     e.preventDefault();
-    if (href === "/pricing") onNavigate("pricing");
-    else if (href.startsWith("#") && href !== "#") {
-      if (page === "landing") document.querySelector(href)?.scrollIntoView({ behavior: "smooth" });
-      else onNavigate("landing", href);
-    }
+    if (page === "landing") document.querySelector(href)?.scrollIntoView({ behavior: "smooth" });
+    else onNavigate("landing", href);
   };
 
   return (
@@ -90,11 +88,12 @@ export function StickyNav({ page, onNavigate }: { page: Page; onNavigate: (page:
 
           <div className="hidden flex-row items-center gap-[26px] md:flex">
             {LINKS.map((link) => {
-              const active = link.label === "Pricing" && page === "pricing";
+              const active = false;
               return (
                 <a
                   key={link.label}
                   href={link.href}
+                  {...outbound(link.href)}
                   onClick={(e) => go(e, link.href)}
                   className={`relative text-[13px] whitespace-nowrap transition-colors duration-200 ease-enter after:absolute after:inset-x-0 after:-bottom-[5px] after:h-[1.5px] after:origin-left after:rounded-full after:bg-[var(--accent)] after:transition-transform after:duration-300 after:ease-enter hover:after:scale-x-100 ${
                     active
@@ -108,7 +107,7 @@ export function StickyNav({ page, onNavigate }: { page: Page; onNavigate: (page:
             })}
           </div>
 
-          <NavCta>Get Opsmira</NavCta>
+          <NavCta href="#install">Install</NavCta>
         </nav>
       </div>
     </>

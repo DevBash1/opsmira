@@ -101,12 +101,12 @@ function Stage({ step }: { step: (typeof STEPS)[number]["number"] }) {
       <ApprovalCard
         status="Awaiting approval"
         timestamp="just now"
-        title="Delete 38 old snapshots"
-        context="Frees 412 GB. Latest per volume is kept."
-        command="opsmira snapshots prune --older 90d"
+        title="Remove unused Docker images"
+        context="Frees about 3 GB. Images used by running containers are kept."
+        command="docker image prune -af"
         riskFilled={2}
         riskLevel="Medium"
-        riskDetail="~3s downtime"
+        riskDetail="re-pulled when needed"
         className="[box-shadow:0px_0px_24px_var(--glow)]"
       />
     </div>

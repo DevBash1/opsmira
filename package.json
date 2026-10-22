@@ -9,6 +9,7 @@
     "dev:server": "npm run dev --prefix server",
     "setup": "npm ci && npm ci --prefix server",
     "build": "tsc --noEmit && vite build",
+    "build:site": "tsc --noEmit && VITE_STATIC_SITE=1 SITE_BASE=${SITE_BASE:-/opsmira/} vite build --outDir dist-site",
     "start": "npm start --prefix server",
     "test": "npm test --prefix server",
     "check": "tsc --noEmit && npm test --prefix server",

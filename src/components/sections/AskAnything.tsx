@@ -11,7 +11,7 @@ const ROWS: Row[] = [
   {
     chips: [
       "Why is my disk full?",
-      "Show slow queries",
+      "What is using my CPU?",
       "Is my TLS cert expiring?",
       "Restart the worker safely",
       "What changed since Friday?",
@@ -21,12 +21,12 @@ const ROWS: Row[] = [
   },
   {
     chips: [
-      "Roll back the last deploy",
+      "Which services failed today?",
       "Clean up old Docker images",
       "Why did the build fail?",
       "Show live nginx logs",
-      "Back up the database now",
-      "How much am I spending?",
+      "Show the biggest log files",
+      "Is the firewall open?",
     ],
     highlight: 2,
     anim: "motion-safe:animate-[marquee-right_100s_linear_infinite] motion-safe:[animation-delay:-30s]",
@@ -34,11 +34,11 @@ const ROWS: Row[] = [
   {
     chips: [
       "Which jobs run tonight?",
-      "Open port 443",
+      "Which ports are listening?",
       "Find the memory leak",
       "Show running containers",
-      "Rotate API secrets",
-      "Did the backup finish?",
+      "Which containers keep restarting?",
+      "Is swap being used?",
     ],
     anim: "motion-safe:animate-[marquee-left_92s_linear_infinite] motion-safe:[animation-delay:-15s]",
   },

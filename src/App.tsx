@@ -1,15 +1,17 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Landing } from "./pages/Landing";
-import { Pricing } from "./pages/Pricing";
 import { StickyNav } from "./components/StickyNav";
+import { STATIC_SITE } from "./lib/site";
 
 // The console (and its animation library) loads only on /app, keeping the marketing pages lean.
-const Console = lazy(() => import("./pages/Console").then((m) => ({ default: m.Console })));
+// A static build has no console, so its code is left out of the bundle entirely.
+const Console = STATIC_SITE ? null : lazy(() => import("./pages/Console").then((m) => ({ default: m.Console })));
 import type { Page } from "./components/Nav";
 
 function pageFromPath(): Page {
-  if (window.location.pathname.startsWith("/app")) return "app";
-  return window.location.pathname.startsWith("/pricing") ? "pricing" : "landing";
+  // A static host has no console behind it: every address is the landing page.
+  if (STATIC_SITE) return "landing";
+  return window.location.pathname.startsWith("/app") ? "app" : "landing";
 }
 
 export default function App() {
@@ -22,7 +24,7 @@ export default function App() {
   }, []);
 
   const navigate = useCallback((next: Page, hash?: string) => {
-    const path = next === "pricing" ? "/pricing" : next === "app" ? "/app" : "/";
+    const path = next === "app" ? "/app" : import.meta.env.BASE_URL;
     window.history.pushState({}, "", hash ? `${path}${hash}` : path);
     setPage(next);
     if (hash) {
@@ -32,7 +34,7 @@ export default function App() {
     }
   }, []);
 
-  if (page === "app") {
+  if (page === "app" && Console) {
     return (
       <Suspense fallback={<div className="h-dvh w-full bg-[var(--canvas)]" />}>
         <Console />
@@ -45,7 +47,7 @@ export default function App() {
       <StickyNav page={page} onNavigate={navigate} />
       <div className="mx-auto w-full max-w-[1440px]">
         <div key={page} className="motion-safe:animate-fade-in">
-          {page === "pricing" ? <Pricing onNavigate={navigate} /> : <Landing onNavigate={navigate} />}
+          <Landing onNavigate={navigate} />
         </div>
       </div>
     </div>

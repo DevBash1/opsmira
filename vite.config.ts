@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
+  // The console is served from the root; the static landing page sits under a repository path on GitHub Pages.
+  base: process.env.SITE_BASE || "/",
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
