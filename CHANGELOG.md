@@ -14,6 +14,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
   blocked for 10 minutes after 5 failed attempts.
 
 ### Added
+- Sign out button in the console. Signing out now revokes the session, so a copied cookie stops working.
+- An install script (`public/install.sh`): Docker or a native systemd service, asks for the key, prints the
+  sign-in details, upgrades by re-running, `--uninstall` to remove.
+- A static landing page for GitHub Pages (`npm run build:site`) with no sign-in, pricing or console, and a
+  workflow that publishes it once the repository is public. Docker images are now built for amd64 and arm64, and
+  `ghcr.io/devbash1/opsmira:edge` follows `main`.
 - Reasoning models: their thinking streams live as one line (a brain icon and the latest words) above what they
   did, and opens to the full text. It shares one open slot with command output, and is kept with the chat.
 - Connect a server without SSH: `opsmira-agent` (one file, Node 22+) dials out to the console with a one-time

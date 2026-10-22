@@ -67,7 +67,21 @@ copied one-liner does what you think. Opsmira puts a conversation in front of th
 
 ## Quick start
 
-You need Node 20+ (or Docker) and an [OpenRouter key](https://openrouter.ai/keys).
+You need an [OpenRouter key](https://openrouter.ai/keys), and Docker or Node 20+.
+
+```bash
+curl -fsSL https://devbash1.github.io/opsmira/install.sh | sh
+```
+
+The installer uses Docker when it is there and builds from source as a systemd service otherwise (`--mode docker`
+or `--mode native` to choose). It asks for your key, prints the sign-in details, and listens on `127.0.0.1:8787`
+only. Run it again to upgrade; `--uninstall` removes it. Read it first at
+[public/install.sh](public/install.sh), or see `--help`.
+
+<details>
+<summary><b>From source</b></summary>
+
+<br>
 
 ```bash
 git clone https://github.com/DevBash1/opsmira.git && cd opsmira
@@ -80,17 +94,23 @@ npm start                          # http://127.0.0.1:8787
 Open `http://127.0.0.1:8787` and sign in. The username is `admin` unless you set `OPSMIRA_USERNAME`; the
 password is printed on first start and saved in `server/data/.admin-password` (or set `OPSMIRA_PASSWORD`).
 
+</details>
+
 <details>
 <summary><b>With Docker</b></summary>
 
 <br>
 
 ```bash
-cp .env.example .env               # add OPENROUTER_API_KEY
-docker compose up -d --build
+docker run -d --name opsmira --restart unless-stopped -p 127.0.0.1:8787:8787 -v opsmira-data:/data \
+  -e OPENROUTER_API_KEY=sk-or-... ghcr.io/devbash1/opsmira:latest
+docker logs opsmira                # the generated sign-in password is printed on first start
 ```
 
-Data lives in the `/data` volume. Tagged releases also publish an image to `ghcr.io/devbash1/opsmira`.
+Or with Compose, from a checkout: `cp .env.example .env` (add `OPENROUTER_API_KEY`), then `docker compose up -d --build`.
+Data lives in the `/data` volume. Images are published for amd64 and arm64: `:latest` and version tags on each
+release, and `:edge` for the current `main`. The container sees itself, not the host; to manage the host, use
+the native install.
 
 </details>
 

@@ -12,6 +12,18 @@ There is no database to run.
 
 ## Install
 
+### The install script
+
+```bash
+curl -fsSL https://devbash1.github.io/opsmira/install.sh | sh
+```
+
+It picks Docker if it works and builds from source as a systemd service otherwise. Options: `--mode docker|native`,
+`--key`, `--port`, `--dir`, `--image`, `--ref`, `--dry-run` (print the steps and change nothing), `--uninstall`
+(add `--purge` to delete the data too). Settings, including the generated password, live in
+`/opt/opsmira/opsmira.env` (mode 600). Run it again to upgrade. A native install runs as the `opsmira` user, so
+it can read the machine but not change it as root; to let it change more, give that account the access you want.
+
 ### Docker
 
 ```bash

@@ -1,0 +1,18 @@
+# Opsmira with Docker Compose:
+#   echo "OPENROUTER_API_KEY=sk-or-..." > .env
+#   docker compose up -d
+#   docker compose logs opsmira      # the sign-in username (admin) and generated password are printed on first start
+services:
+  opsmira:
+    image: ghcr.io/devbash1/opsmira:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      # This machine only. Put HTTPS in front (docs/self-hosting.md) before exposing it.
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - opsmira-data:/data
+
+volumes:
+  opsmira-data:
