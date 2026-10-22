@@ -57,7 +57,7 @@ case "$SERVER" in ws://*|wss://*) ;; *) die "--server must start with ws:// or w
 case "$ACCESS" in read-only|operate) ;; *) die "--access must be read-only or operate" ;; esac
 case "$RUN_AS" in *[!a-zA-Z0-9._-]*|"") die "--run-as has characters that are not allowed" ;; esac
 [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || die "run as root (sudo), or add --dry-run to see the steps"
-command -v systemctl >/dev/null 2>&1 || die "this needs systemd. Run the agent by hand instead: node opsmira-agent.mjs --server ... --token ..."
+command -v systemctl >/dev/null 2>&1 || die "this needs systemd. On a hosting platform (Heroku, Railway, Pxxl, ...) there is no systemd: use Connect a server > Hosted app in the console, which runs your app under the agent. Otherwise run it by hand: node opsmira-agent.mjs --server ... --token ..."
 # A snap-packaged Node cannot run as a system service (snap-confine needs privileges the service lacks), so it never counts.
 is_snap() { case "$1" in /snap/*|*/snap/bin/*) return 0 ;; esac; case "$(readlink -f "$1" 2>/dev/null)" in /snap/*|*/snap) return 0 ;; esac; return 1; }
 node_ok() { ! is_snap "$1" && [ -x "$1" ] && [ "$("$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)" -ge 22 ]; }

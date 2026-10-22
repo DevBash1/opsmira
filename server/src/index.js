@@ -25,7 +25,7 @@ import { appendAudit, deleteArtifact, listArtifacts, listConversations, readArti
 import { buildLastTurn, rewindLast } from "./history.js";
 import { startSampler } from "./metrics.js";
 import { knownHosts } from "./machine.js";
-import { AGENT_PATH, attachAgentGateway, createPairingToken, listAgents, revokeAgent } from "./agents.js";
+import { AGENT_PATH, attachAgentGateway, createAgentCredential, createPairingToken, listAgents, revokeAgent } from "./agents.js";
 import { collectSurface, surfaceList } from "./surfaces.js";
 
 const app = express();
@@ -44,7 +44,7 @@ function conversationIdFromRequest(req) {
 }
 
 // The agent program itself. Public on purpose: it is only code. What authorizes an agent is the token.
-const AGENT_FILES = { "opsmira-agent.mjs": "text/javascript", "install.sh": "text/plain" };
+const AGENT_FILES = { "opsmira-agent.mjs": "text/javascript", "install.sh": "text/plain", "install.ps1": "text/plain" };
 app.get("/agent/:file", (req, res) => {
   const type = AGENT_FILES[req.params.file];
   if (!type) {
@@ -139,6 +139,21 @@ app.get("/api/agents", (req, res) => {
 });
 
 /** A one-time command that connects a server to this console. */
+/** The command to run on the server, for its OS and the access the owner chose. `command` installs a service that survives reboots; `manual` runs it once by hand. */
+function agentCommands({ origin, ws, token, os, access }) {
+  const operate = access === "operate";
+  if (os === "windows") {
+    return {
+      command: `& ([scriptblock]::Create((irm ${origin}/agent/install.ps1))) -Server ${ws} -Token ${token}${operate ? " -Access operate" : ""}`,
+      manual: `irm ${origin}/agent/opsmira-agent.mjs -OutFile opsmira-agent.mjs; node opsmira-agent.mjs --server ${ws} --token ${token}${operate ? " --access operate" : ""}`,
+    };
+  }
+  return {
+    command: `curl -fsSL ${origin}/agent/install.sh | sudo sh -s -- --server ${ws} --token ${token} --install-node${operate ? " --access operate" : ""}`,
+    manual: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs && node opsmira-agent.mjs --server ${ws} --token ${token}${operate ? " --access operate" : ""}`,
+  };
+}
+
 app.post("/api/agents/token", (req, res) => {
   const { token, expiresAt } = createPairingToken();
   const origin = `${req.protocol}://${req.get("host")}`;
@@ -146,9 +161,23 @@ app.post("/api/agents/token", (req, res) => {
   res.json({
     token,
     expiresAt,
-    // Installs a service that survives reboots, and the same thing run once by hand.
-    command: `curl -fsSL ${origin}/agent/install.sh | sudo sh -s -- --server ${ws} --token ${token} --install-node`,
-    manual: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs && node opsmira-agent.mjs --server ${ws} --token ${token}`,
+    ...agentCommands({ origin, ws, token, os: req.body?.os, access: req.body?.access }),
+  });
+});
+
+/** For a project on a hosting platform: a credential to put in the app's environment, and the start command that uses it. */
+app.post("/api/agents/credential", (req, res) => {
+  const { credential, name, host } = createAgentCredential(typeof req.body?.name === "string" ? req.body.name : "");
+  const origin = `${req.protocol}://${req.get("host")}`;
+  const ws = origin.replace(/^http/, "ws") + AGENT_PATH;
+  const access = req.body?.access === "operate" ? " --access operate" : "";
+  res.json({
+    name,
+    host,
+    credential,
+    env: `OPSMIRA_CREDENTIAL=${credential}`,
+    build: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs`,
+    start: `node opsmira-agent.mjs --server ${ws} --name ${name}${access} --exec "<your start command>"`,
   });
 });
 

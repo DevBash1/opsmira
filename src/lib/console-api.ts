@@ -237,7 +237,10 @@ export const api = {
   },
   hosts: () => fetch("/api/hosts").then((r) => json<{ hosts: string[] }>(r)),
   agents: () => fetch("/api/agents").then((r) => json<{ agents: AgentInfo[]; defaultServer?: string }>(r)),
-  agentToken: () => post("/api/agents/token", {}).then((r) => json<{ token: string; expiresAt: number; command: string; manual: string }>(r)),
+  agentToken: (options: { os: "linux" | "windows"; access: "read-only" | "operate" }) =>
+    post("/api/agents/token", options).then((r) => json<{ token: string; expiresAt: number; command: string; manual: string }>(r)),
+  agentCredential: (options: { name: string; access: "read-only" | "operate" }) =>
+    post("/api/agents/credential", options).then((r) => json<{ name: string; env: string; build: string; start: string }>(r)),
   removeAgent: (id: string) => fetch(`/api/agents/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers() }).then((r) => json<{ ok: true }>(r)),
   audit: () => fetch("/api/audit").then((r) => json<{ entries: AuditEntry[] }>(r)),
   models: () => fetch("/api/models").then((r) => json<{ models: ModelInfo[]; default: string }>(r)),

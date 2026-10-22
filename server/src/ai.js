@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { randomUUID } from "crypto";
 import { env } from "./env.js";
 import { classifyInspect, runCommand } from "./exec.js";
-import { AGENT_PREFIX, agentAccess, listAgents } from "./agents.js";
+import { AGENT_PREFIX, agentAccess, agentOs, listAgents } from "./agents.js";
 import { appendAudit } from "./store.js";
 import { deriveScene } from "./views.js";
 import { SURFACES, SURFACE_IDS, collectSurface } from "./surfaces.js";
@@ -189,7 +189,7 @@ function targetServer(asked, dflt) {
 function serversNote(dflt) {
   const agents = listAgents();
   if (!agents.length) return "";
-  const lines = agents.map((a) => `- ${a.host}: ${a.online ? "online" : "offline"}${a.online ? (a.access === "operate" ? ", commands allowed" : ", read-only (surfaces only)") : ""}${a.hostname ? `, hostname ${a.hostname}` : ""}`);
+  const lines = agents.map((a) => `- ${a.host}: ${a.online ? "online" : "offline"}${a.online ? (a.access === "operate" ? ", commands allowed" : ", read-only (surfaces only)") : ""}${a.os === "windows" ? ", Windows: commands are PowerShell and the Linux tools are not there; every command needs propose_action" : ""}${a.hostname ? `, hostname ${a.hostname}` : ""}${a.appLog ? `, the app's output is copied to ${a.appLog} (tail it for logs)` : ""}`);
   const where = dflt
     ? `The owner has selected ${dflt}: without server (and without host for show_surface), everything runs there. Pass server "local" only for the machine Opsmira itself runs on.`
     : "Without server, commands run on this server (the one Opsmira runs on).";
@@ -629,7 +629,9 @@ export async function runTurn(
           result = { error: target.error };
         } else {
           // Full access skips the read-only check: the owner allowed any command.
-          const check = fullAccess ? { ok: true } : classifyInspect(command);
+          // The read-only allow-list is for Linux commands, so on a Windows server nothing is known safe.
+          const onWindows = target.server?.startsWith(AGENT_PREFIX) && agentOs(target.server.slice(AGENT_PREFIX.length)) === "windows";
+          const check = fullAccess ? { ok: true } : onWindows ? { ok: false, reason: "this server runs Windows, where no command is known to be read-only" } : classifyInspect(command);
           if (!check.ok) {
             result = { error: `rejected: ${check.reason}. Use propose_action instead if this needs to run.` };
             onEvent({ type: "tool_call", tool: "inspect", command, server: target.server, rejected: check.reason });

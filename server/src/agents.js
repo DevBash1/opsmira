@@ -62,6 +62,19 @@ export function createPairingToken() {
   return { token, expiresAt };
 }
 
+/**
+ * Makes an agent up front and returns its credential, which is shown once. For hosts that cannot keep a state
+ * file (hosting platforms reset the disk on every deploy): the credential goes into an environment variable, so
+ * every deploy and restart reconnects as this same agent instead of pairing again.
+ */
+export function createAgentCredential(wantedName) {
+  const credential = `ops_agent_${randomBytes(32).toString("base64url")}`;
+  const agent = { id: randomUUID(), name: uniqueName(cleanName(wantedName) ?? "app"), credentialHash: sha(credential), createdAt: new Date().toISOString() };
+  state.agents.push(agent);
+  save();
+  return { credential, name: agent.name, host: `${AGENT_PREFIX}${agent.name}` };
+}
+
 /** Uses a token once. True when it was valid. */
 function consumeToken(token) {
   const hash = sha(token);
@@ -90,6 +103,8 @@ export function listAgents() {
     access: live.get(a.id)?.info?.access ?? a.info?.access ?? null,
     hostname: a.info?.hostname ?? null,
     platform: a.info?.platform ?? null,
+    os: a.info?.os === "win32" ? "windows" : a.info?.os ? "unix" : null,
+    appLog: a.info?.appLog ?? null,
     createdAt: a.createdAt,
     lastSeen: a.lastSeen ?? null,
   }));
@@ -149,6 +164,12 @@ export async function runOnAgent(name, command, { signal } = {}) {
   return { exitCode: r.code, signal: r.signal ?? null, output: r.output, durationMs: r.durationMs ?? Date.now() - started, timedOut: !!r.timedOut };
 }
 
+/** "windows" for a connected Windows agent (its commands are PowerShell), else "unix". */
+export function agentOs(name) {
+  const agent = agentByName(name);
+  return agent && live.has(agent.id) && live.get(agent.id).info?.os === "win32" ? "windows" : "unix";
+}
+
 /** "read-only" or "operate" for an agent that is connected now, else null. */
 export function agentAccess(name) {
   const agent = agentByName(name);
@@ -197,6 +218,8 @@ export function attachAgentGateway(server) {
           platform: String(msg.info?.platform ?? "").slice(0, 80),
           agent: String(msg.info?.agent ?? "").slice(0, 20),
           access: msg.info?.access === "operate" ? "operate" : "read-only",
+          os: typeof msg.info?.os === "string" ? msg.info.os.slice(0, 20) : undefined,
+          appLog: typeof msg.info?.appLog === "string" ? msg.info.appLog.slice(0, 200) : undefined,
         };
         let credential = null;
         if (typeof msg.credential === "string" && msg.credential) {

@@ -89,7 +89,7 @@ over SSH. Requirements:
 
 ## Connect a server without SSH (agent)
 
-Open **Surfaces**, choose **Connect a server**, and run the command it shows on the server (as root). The agent needs Node 22+; if the server has an older one the command downloads a private Node 22 for the agent (`--install-node`) and leaves the system Node alone.
+Open **Surfaces**, choose **Connect a server**, pick what you are connecting and whether the console may run commands there, and run the command it shows on the server (as root). The agent needs Node 22+; if the server has an older one the command downloads a private Node 22 for the agent (`--install-node`) and leaves the system Node alone.
 It installs `opsmira-agent` as a systemd service that dials out to the console, so the server needs no open
 port and you hand over no key. Prefer not to install anything? The panel also has a "just run it once" command.
 
@@ -109,6 +109,24 @@ port and you hand over no key. Prefer not to install anything? The panel also ha
 - **Remove it:** `curl -fsSL https://CONSOLE/agent/install.sh | sudo sh -s -- --uninstall`, then Remove in the console.
 - Trust: the agent obeys the console it paired with. Anyone who controls the console can use an `operate`
   agent's account, so protect the console like an SSH key.
+
+### Windows
+
+Choose **Windows** in the Connect panel and run the command it shows in a PowerShell opened as administrator. It adds a scheduled task (`opsmira-agent`) that starts at boot and restarts if it stops, downloading a checksum-verified private Node 22 only if the machine has none. Commands the console runs there are PowerShell. The Linux-style surfaces (memory, disks, journal) do not read a Windows machine, so work through chat; with **Run commands** the AI proposes PowerShell and every command waits for your approval (nothing on Windows is treated as read-only). **Read only** is very limited there: just `hostname`, `whoami`, `tasklist`, `ipconfig`, `systeminfo`, `netstat`. The scheduled task runs as SYSTEM, so an `operate` agent has full rights on that machine. Remove it with `-Uninstall`. The Windows installer is new and has had less testing than the Linux one.
+
+### Hosted platforms (Heroku, Railway, Pxxl, Render and similar)
+
+There is no systemd and no root there, and the disk resets on every deploy, so the installer does not apply. Choose **Hosted app** in the Connect panel instead: it makes a credential you put in the platform's environment variables (`OPSMIRA_CREDENTIAL`), and shows a build step and a start command. Your app then runs *under* the agent:
+
+```
+node opsmira-agent.mjs --server wss://CONSOLE/api/agent/connect --name my-api --exec "npm start"
+```
+
+- The credential is long-lived and reused on every deploy and restart, so the app comes back as the same server in the console. It is shown once; keep it like a password. Remove the server in the console to revoke it.
+- The app's output goes to the platform's own logs as before, and is also copied to a log file (`OPSMIRA_APP_LOG`, default `/tmp/opsmira-app.log`, kept to its last 512 KB) that the AI can tail.
+- The agent exits with the app's exit code, so the platform's restart policy works unchanged. If the agent cannot connect, or is misconfigured, the app still starts.
+- Commands run as the platform's unprivileged user inside the app's container, with the app's own directory as the working directory. The `logs` surface (journalctl) does not apply there; the AI reads the log file instead.
+- The agent needs Node 22+ in the container. Without it, add it to the image or the build.
 
 ## Settings
 

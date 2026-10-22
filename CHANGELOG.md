@@ -5,6 +5,14 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Connecting a server asks first: Linux or Mac, Windows, or a hosted app, and read only or run commands. The
+  command shown matches the choice.
+- Windows agents: a PowerShell installer (`install.ps1`, a scheduled task that starts at boot) and PowerShell
+  command running. Commands there always wait for approval.
+- Hosted platforms (Heroku, Railway, Pxxl...): a credential for the app's environment and `--exec`, which runs the
+  app under the agent so every deploy reconnects as the same server and its output can be read.
+
 ### Fixed
 - The agent installer no longer picks a snap-packaged Node (it cannot run as a service and crash-looped); it uses
   `--install-node`'s private Node 22 instead.

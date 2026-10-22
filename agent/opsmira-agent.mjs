@@ -8,11 +8,20 @@
 // First run: pairs with the one-time token and saves a credential next to the state file (mode 0600).
 // Later runs: reconnect with the credential, forever, with backoff.
 //
+// On a hosting platform (no systemd, no root, a disk that resets on every deploy) run your app *under* the
+// agent, with a credential made in the console (Connect a server > Hosted app), so each deploy reconnects as
+// the same server and the app's output stays readable:
+//
+//   OPSMIRA_CREDENTIAL=ops_agent_... node opsmira-agent.mjs --server wss://... --name my-app --exec "npm start"
+//
+// The app runs as a child with its output passed straight through (platform logs keep working) and copied to
+// a log file the console can tail. The agent exits with the app's exit code, and a lost connection never stops the app.
+//
 // --access read-only  (default) only the read-only programs the console's surfaces use
 // --access operate    also lets the console run shell commands (the console asks its owner before any
 //                     change; this is the setting that makes the agent able to act). "full" means the same.
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, openSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -31,12 +40,16 @@ const PORT_PROBE = /^for p in [0-9 ]{1,200}; do if timeout 1 bash -c "exec 3<>\/
 
 const SYSTEMCTL_READ = new Set(["list-units", "list-timers", "list-unit-files", "is-active", "is-enabled", "status", "show", "cat"]);
 const DOCKER_READ = new Set(["ps", "inspect", "logs", "info", "version", "images", "stats"]);
+const IS_WINDOWS = process.platform === "win32";
+// What may run read-only on Windows: plain status programs, none of which change anything.
+const WINDOWS_READ = new Set(["hostname", "whoami", "tasklist", "ipconfig", "systeminfo", "netstat", "ver"]);
 const PLAIN_READ = new Set(["cat", "ls", "tail", "du", "df", "ps", "hostname", "true", "test", "ss", "top", "uname", "uptime", "free", "id", "date"]);
 
 /** Whether `file args` may run at the given access level. Returns null when fine, else the reason. */
 export function denied(access, file, args = []) {
   if (access === "operate") return null;
   const name = String(file);
+  if (IS_WINDOWS) return WINDOWS_READ.has(name.toLowerCase().replace(/\.exe$/, "")) ? null : `${name} is not allowed in read-only mode on Windows`;
   const first = args.find((a) => !String(a).startsWith("-"));
   if (PLAIN_READ.has(name)) return null;
   if (name === "systemctl") return SYSTEMCTL_READ.has(first) ? null : "systemctl is limited to read-only commands";
@@ -88,6 +101,8 @@ export function runProgram(file, args = [], { timeout = 8000, input } = {}) {
 /* ---------------- shell commands (operate only) ---------------- */
 
 const SHELL_OUTPUT_CAP = 64 * 1024;
+/** Where console commands start: the home directory, or the app's own directory when the agent runs it. */
+let shellCwd = os.homedir();
 
 /** Run a command line the way the console's own shell runs would, and keep it killable. */
 export function runShell(command, { timeout = 30000, onChild } = {}) {
@@ -96,7 +111,10 @@ export function runShell(command, { timeout = 30000, onChild } = {}) {
     const started = Date.now();
     let child;
     try {
-      child = spawn("/bin/sh", ["-c", String(command)], { cwd: os.homedir(), timeout: limit });
+      // Windows has no /bin/sh: commands there are PowerShell.
+      child = IS_WINDOWS
+        ? spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", String(command)], { cwd: shellCwd, timeout: limit, windowsHide: true })
+        : spawn("/bin/sh", ["-c", String(command)], { cwd: shellCwd, timeout: limit });
     } catch (err) {
       resolve({ ok: false, code: null, output: `exec error: ${err.message}`, durationMs: 0 });
       return;
@@ -150,11 +168,12 @@ function readState(file) {
 }
 
 function writeState(file, state) {
-  writeFileSync(file, JSON.stringify(state, null, 2), { mode: 0o600 });
+  if (!file) return; // a credential given by the environment is never written to disk
   try {
+    writeFileSync(file, JSON.stringify(state, null, 2), { mode: 0o600 });
     chmodSync(file, 0o600);
-  } catch {
-    // best effort
+  } catch (err) {
+    log(`could not save ${file}: ${err.message}`); // read-only disks are common on hosting platforms
   }
 }
 
@@ -167,7 +186,7 @@ function connect(opts, state, onClose) {
     const hello = {
       type: "hello",
       name: opts.name,
-      info: { hostname: os.hostname(), platform: `${os.platform()} ${os.release()}`, node: process.version, agent: VERSION, access: opts.access },
+      info: { hostname: os.hostname(), platform: `${os.platform()} ${os.release()}`, node: process.version, agent: VERSION, os: process.platform, access: opts.access, ...(opts.appLog ? { appLog: opts.appLog } : {}) },
     };
     if (state.credential) hello.credential = state.credential;
     else hello.token = opts.token;
@@ -188,7 +207,7 @@ function connect(opts, state, onClose) {
         state.id = msg.id;
         state.name = msg.name;
         writeState(opts.state, state);
-        log(`paired as "${msg.name}"; credential saved to ${opts.state}`);
+        log(`paired as "${msg.name}"${opts.state ? `; credential saved to ${opts.state}` : ""}`);
       } else {
         log(`connected as "${msg.name}" (access: ${opts.access})`);
       }
@@ -230,42 +249,116 @@ function connect(opts, state, onClose) {
     }
   });
 
+  opts.socket = ws;
   ws.addEventListener("close", () => onClose(ready));
   ws.addEventListener("error", () => {});
   return ws;
+}
+
+/* ---------------- running an app under the agent ---------------- */
+
+const APP_LOG_KEEP = 512 * 1024;
+
+/** The app's output file: appended to, and cut back to its last 512 KB (on a line) when it passes twice that. */
+function appLogWriter(file) {
+  let fd = null;
+  let size = 0;
+  try {
+    fd = openSync(file, "a", 0o600);
+    size = statSync(file).size;
+  } catch {
+    return () => {}; // no writable disk: the output still reaches the platform's own logs
+  }
+  return (chunk) => {
+    try {
+      writeSync(fd, chunk);
+      size += chunk.length;
+      if (size > APP_LOG_KEEP * 2) {
+        const kept = readFileSync(file).subarray(-APP_LOG_KEEP);
+        const nl = kept.indexOf(10);
+        writeFileSync(file, nl >= 0 ? kept.subarray(nl + 1) : kept, { mode: 0o600 });
+        size = statSync(file).size;
+      }
+    } catch {
+      // keep the app running whatever happens to the copy
+    }
+  };
+}
+
+/** Runs the app as a child: output passed through and copied, signals forwarded, our exit code is theirs. */
+function startApp(opts) {
+  const copy = appLogWriter(opts.appLog);
+  const child = spawn(opts.exec, { shell: true, stdio: ["inherit", "pipe", "pipe"], env: process.env });
+  child.stdout.on("data", (c) => {
+    process.stdout.write(c);
+    copy(c);
+  });
+  child.stderr.on("data", (c) => {
+    process.stderr.write(c);
+    copy(c);
+  });
+  for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => child.kill(sig));
+  child.on("error", (err) => {
+    log(`could not start the app: ${err.message}`);
+    process.exit(127);
+  });
+  child.on("exit", (code, signal) => {
+    opts.stop = true;
+    try {
+      opts.socket?.close();
+    } catch {
+      // leaving anyway
+    }
+    log(`the app exited (${signal ?? code}); the agent is stopping with it`);
+    process.exit(code ?? 128 + (os.constants.signals[signal] ?? 1));
+  });
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || args.h) {
     console.log("opsmira-agent --server wss://HOST/api/agent/connect --token ops_connect_... [--name web-1] [--access read-only|operate] [--state FILE]");
+    console.log("opsmira-agent --server wss://HOST/api/agent/connect --credential ops_agent_... --exec \"npm start\"   (run an app under the agent)");
     return;
   }
   const opts = {
     server: typeof args.server === "string" ? args.server : process.env.OPSMIRA_SERVER,
     token: typeof args.token === "string" ? args.token : process.env.OPSMIRA_TOKEN,
+    credential: typeof args.credential === "string" ? args.credential : process.env.OPSMIRA_CREDENTIAL,
+    exec: typeof args.exec === "string" ? args.exec : process.env.OPSMIRA_EXEC,
+    appLog: typeof args["app-log"] === "string" ? args["app-log"] : process.env.OPSMIRA_APP_LOG,
     name: typeof args.name === "string" ? args.name : os.hostname().toLowerCase().replace(/[^a-z0-9._-]/g, "-").slice(0, 40),
     access: args.access === "operate" || args.access === "full" ? "operate" : "read-only",
     state: typeof args.state === "string" ? args.state : join(process.env.HOME || os.homedir(), ".opsmira-agent.json"),
     stop: false,
   };
-  if (!opts.server) {
-    console.error("Missing --server (the console's agent address, e.g. wss://opsmira.example.com/api/agent/connect).");
-    process.exit(2);
+  // With --exec the app comes first: a problem with the agent is reported and the app starts without it.
+  const refuse = (message) => {
+    console.error(message);
+    if (opts.exec) {
+      console.error("Starting the app without the agent.");
+      opts.appLog ||= join(os.tmpdir(), "opsmira-app.log");
+      startApp(opts);
+    } else process.exit(2);
+  };
+  if (!opts.server) return refuse("Missing --server (the console's agent address, e.g. wss://opsmira.example.com/api/agent/connect).");
+  // A credential from the environment is the whole identity: nothing is read from or written to disk.
+  if (opts.credential) opts.state = null;
+  if (opts.exec) {
+    opts.appLog ||= join(os.tmpdir(), "opsmira-app.log");
+    shellCwd = process.cwd();
+  } else {
+    opts.appLog = undefined;
   }
-  const state = existsSync(opts.state) ? readState(opts.state) : {};
-  if (!state.credential && !opts.token) {
-    console.error("Missing --token: copy the connect command from the console (Surfaces, Connect a server).");
-    process.exit(2);
-  }
-  if (typeof WebSocket === "undefined") {
-    console.error("This needs Node 22 or newer (built-in WebSocket).");
-    process.exit(2);
-  }
+  const state = opts.credential ? { credential: opts.credential } : existsSync(opts.state) ? readState(opts.state) : {};
+  if (!state.credential && !opts.token) return refuse("Missing --token: copy the connect command from the console (Surfaces, Connect a server).");
+  if (typeof WebSocket === "undefined") return refuse("This needs Node 22 or newer (built-in WebSocket).");
   if (/^ws:\/\//i.test(opts.server) && !/^ws:\/\/(localhost|127\.|\[::1\])/i.test(opts.server)) {
     log("warning: this connection is not encrypted (ws://). Put the console behind HTTPS and use wss:// so the credential is not sent in the clear.");
   }
   if (opts.access === "operate") log("access: OPERATE. The console can run commands as this user (it asks its owner before changes).");
+
+  if (opts.exec) startApp(opts);
 
   let delay = 1000;
   const loop = () => {

@@ -123,3 +123,60 @@ test("a read-only agent refuses shell commands; an operate agent runs them and c
   readOnly.child.kill();
   operate.child.kill();
 });
+
+function startHosted(credential, exec, extra = []) {
+  const child = spawn(process.execPath, [AGENT, "--server", url, "--name", "ignored", "--exec", exec, ...extra], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, OPSMIRA_CREDENTIAL: credential, OPSMIRA_APP_LOG: join(mkdtempSync(join(tmpdir(), "opsmira-app-")), "app.log"), HOME: mkdtempSync(join(tmpdir(), "opsmira-home-")) },
+  });
+  let output = "";
+  child.stdout.on("data", (c) => (output += c));
+  child.stderr.on("data", (c) => (output += c));
+  children.push(child);
+  return { child, output: () => output };
+}
+
+test("a hosted app: a pre-made credential connects as the same agent on every start, and no state file is written", async () => {
+  const { credential, name } = agents.createAgentCredential("My API");
+  assert.equal(name, "my-api");
+  assert.match(credential, /^ops_agent_/);
+
+  const first = startHosted(credential, "echo hello-from-app; sleep 30");
+  const online = await until(() => agents.listAgents().find((x) => x.name === name && x.online));
+  assert.equal(online.access, "read-only");
+  assert.ok(online.appLog, "the app log path is reported");
+  await until(() => first.output().includes("hello-from-app"));
+  first.child.kill("SIGTERM");
+  await until(() => !agents.listAgents().find((x) => x.name === name)?.online);
+
+  // A fresh start (a new deploy, an empty disk) is the same agent, not a new one.
+  const second = startHosted(credential, "sleep 30");
+  const again = await until(() => agents.listAgents().find((x) => x.name === name && x.online));
+  assert.equal(again.id, online.id);
+  assert.equal(agents.listAgents().filter((x) => x.name === name).length, 1);
+  second.child.kill("SIGTERM");
+});
+
+test("a hosted app's agent exits with the app's exit code, and the app starts even when the agent cannot", async () => {
+  const { credential } = agents.createAgentCredential("crashy");
+  const crash = startHosted(credential, "exit 7");
+  const code = await new Promise((r) => crash.child.on("exit", r));
+  assert.equal(code, 7);
+
+  const noServer = spawn(process.execPath, [AGENT, "--exec", "echo app-still-ran; exit 4"], { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, OPSMIRA_SERVER: "" } });
+  let out = "";
+  noServer.stdout.on("data", (c) => (out += c));
+  const code2 = await new Promise((r) => noServer.on("exit", r));
+  assert.equal(code2, 4);
+  assert.match(out, /app-still-ran/);
+});
+
+test("a revoked credential is refused like any other", async () => {
+  const { credential, name } = agents.createAgentCredential("gone");
+  const id = agents.listAgents().find((x) => x.name === name).id;
+  agents.revokeAgent(id);
+  const h = startHosted(credential, "sleep 5");
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal(agents.listAgents().find((x) => x.name === name), undefined);
+  h.child.kill("SIGTERM");
+});
