@@ -1131,34 +1131,35 @@ function ConsoleApp({
     return () => document.removeEventListener("keydown", onKey);
   }, [preview, showScenes, showAudit, showHistory, showMemory, showArtifacts]);
 
-  // Servers that connected themselves, refreshed while the console is open.
-  useEffect(() => {
-    let alive = true;
-    const load = () =>
-      api
-        .agents()
-        .then((r) => {
-          if (!alive) return;
-          setAgentList(r.agents);
-          setDefaultServer(r.defaultServer ?? "");
-          setLocalLabel(r.defaultServer ? "Opsmira container" : "this server");
-          // A server that was removed stops being the choice.
-          setServerId((id) => {
-            if (id && id !== "local" && !r.agents.some((a) => a.host === id)) {
-              setServerChoice("");
-              return "";
-            }
-            return id;
-          });
-        })
-        .catch(() => {});
-    load();
-    const t = window.setInterval(() => document.visibilityState === "visible" && load(), 20000);
-    return () => {
-      alive = false;
-      window.clearInterval(t);
-    };
+  // Servers that connected themselves: read on load, on focus, whenever the menu opens, and every few seconds.
+  const loadAgents = useCallback(() => {
+    api
+      .agents()
+      .then((r) => {
+        setAgentList(r.agents);
+        setDefaultServer(r.defaultServer ?? "");
+        setLocalLabel(r.defaultServer ? "Opsmira container" : "this server");
+        // A server that was removed stops being the choice.
+        setServerId((id) => {
+          if (id && id !== "local" && !r.agents.some((a) => a.host === id)) {
+            setServerChoice("");
+            return "";
+          }
+          return id;
+        });
+      })
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    loadAgents();
+    const t = window.setInterval(() => document.visibilityState === "visible" && loadAgents(), 5000);
+    window.addEventListener("focus", loadAgents);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("focus", loadAgents);
+    };
+  }, [loadAgents]);
 
   const serverOptions: ServerOption[] = [
     {
@@ -2121,7 +2122,7 @@ function ConsoleApp({
           />
           <div className="flex w-full min-w-0 shrink-0 flex-row items-center gap-[10px]">
             <ModeChip mode={mode} onChange={pickMode} disabled={running} />
-            {agentList.length > 0 && <ServerChip servers={serverOptions} value={shownServer} onChange={pickServer} disabled={running} />}
+            {agentList.length > 0 && <ServerChip servers={serverOptions} value={shownServer} onChange={pickServer} onOpen={loadAgents} disabled={running} />}
             {models.length > 0 && model && <ModelChip models={models} value={model} onChange={pickModel} attention={chipAttention} />}
             {/* One button: Send when idle; while the agent works it is Stop (a stop square inside the
                 turning loading ring), and becomes "send guidance" as soon as something is typed. */}

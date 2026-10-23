@@ -12,7 +12,7 @@ export interface ServerOption {
 }
 
 /** Which server the agent works on, picked from a menu above the composer. Shown once more than one is available. */
-export function ServerChip({ servers, value, onChange, disabled = false }: { servers: ServerOption[]; value: string; onChange: (id: string) => void; disabled?: boolean }) {
+export function ServerChip({ servers, value, onChange, onOpen, disabled = false }: { servers: ServerOption[]; value: string; onChange: (id: string) => void; onOpen?: () => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -30,7 +30,10 @@ export function ServerChip({ servers, value, onChange, disabled = false }: { ser
         aria-expanded={open}
         disabled={disabled}
         title={disabled ? "Change the server once the agent has finished" : `Working on ${current.label}`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (!open) onOpen?.();
+          setOpen((v) => !v);
+        }}
         className="flex h-[26px] max-w-full cursor-pointer flex-row items-center gap-[6px] rounded-full bg-[var(--soft)] pr-[10px] pl-[9px] text-[11px] text-[var(--ink)] transition-colors duration-200 ease-enter hover:bg-[var(--line)] disabled:cursor-not-allowed disabled:opacity-60"
       >
         <Icon name="server" className="h-[11px] w-[11px] shrink-0 text-[var(--accent)]" />
