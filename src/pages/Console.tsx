@@ -1394,6 +1394,7 @@ function ConsoleApp({
 
   const submit = () => {
     if (stopping) return;
+    if (commandMode && !commandText) return;
     const images = attachments.map((a) => a.url);
     if (running) steer(input, images);
     else send(input, images);
@@ -1597,7 +1598,10 @@ function ConsoleApp({
   }, []);
 
   const presence = stopping ? "stopping" : busyProposal ? "finishing" : status || (sending ? "thinking" : "");
-  const canSend = !stopping && (input.trim().length > 0 || attachments.length > 0);
+  // "!" first: the rest is a command to run as typed on the selected server; the agent then reads the result.
+  const commandMode = !running && input.startsWith("!");
+  const commandText = commandMode ? input.slice(1).trim() : "";
+  const canSend = !stopping && (commandMode ? commandText.length > 0 : input.trim().length > 0 || attachments.length > 0);
   // While the agent works, the send button is the Stop button until guidance is typed.
   const stopMode = running && (stopping || !canSend);
   const queuedSteers = current?.steers.filter((s) => s.state !== "delivered") ?? [];
@@ -2178,12 +2182,24 @@ function ConsoleApp({
               addImages(files);
             }}
             placeholder={running ? "Add guidance — the agent picks it up at its next step" : "What would you like to know or do?"}
-            className="w-full min-w-0 bg-transparent pr-[8px] text-[16px] text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
+            spellCheck={commandMode ? false : undefined}
+            autoCapitalize={commandMode ? "off" : undefined}
+            autoCorrect={commandMode ? "off" : undefined}
+            className={`w-full min-w-0 bg-transparent pr-[8px] text-[16px] text-[var(--ink)] outline-none placeholder:text-[var(--muted)] ${commandMode ? "font-code text-[14px]" : ""}`}
           />
           <div className="flex w-full min-w-0 shrink-0 flex-row items-center gap-[10px]">
             <ModeChip mode={mode} onChange={pickMode} disabled={running} />
             {agentList.length > 0 && <ServerChip servers={serverOptions} value={shownServer} onChange={pickServer} onOpen={loadAgents} disabled={running} />}
             {models.length > 0 && model && <ModelChip models={models} value={model} onChange={pickModel} attention={chipAttention} />}
+            {commandMode && (
+              <span
+                title="Runs exactly what you typed on the selected server, then the agent reads the result."
+                className="font-code hidden min-w-0 shrink items-center gap-[6px] truncate text-[11px] text-[var(--accent-strong)] motion-safe:animate-blur-rise sm:flex"
+              >
+                <Icon name="terminal" className="h-[11px] w-[11px] shrink-0" />
+                <span className="truncate">Command · runs on {shownServer === "local" ? "this server" : shownServer.replace(/^agent:/, "")}</span>
+              </span>
+            )}
             {/* One button: Send when idle; while the agent works it is Stop (a stop square inside the
                 turning loading ring), and becomes "send guidance" as soon as something is typed. */}
             <motion.button

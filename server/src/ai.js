@@ -48,6 +48,7 @@ Dynamic UI first:
 
 Rules:
 - Prefer inspect to gather facts before proposing anything.
+- A message that starts with ! is the owner running that command themselves: the inspect call and its output follow it already. Do not run it again. Say briefly what the result shows or answer what they asked about it; if it failed, say why. Say nothing if there is nothing to add beyond the output.
 - Be efficient with tool calls: combine related checks into one command where you can. You have plenty of rounds for a real investigation, so keep going until the task is done. If you run out, summarise what you found and the single next step.
 - Every propose_action needs: a short title, a one-sentence plain-language explanation of what it does and why, a riskLevel of "Low", "Medium", or "High", and a one-line riskDetail (what could go wrong).
 - If the action is irreversible or destroys data (deleting files/volumes/backups, dropping a database, force-removing a container with volumes, truncating logs that matter, anything with no undo), also set confirmPhrase to a short, specific string identifying exactly what's being destroyed (a resource name, not a generic word like "yes" or "delete"). The owner has to type it back exactly before the action can run. Leave confirmPhrase out for ordinary risky-but-reversible actions (restarts, installs, config edits).
@@ -189,6 +190,42 @@ function targetServer(asked, dflt) {
 }
 
 /** The servers that connected themselves, for the prompt. Empty when there are none. */
+/** "!command" in the composer: the owner's own command. Null when the message is not one. */
+export function ownerCommand(text) {
+  const t = typeof text === "string" ? text.trim() : "";
+  return t.startsWith("!") ? t.slice(1).trim() : null;
+}
+
+/**
+ * Run the owner's own command on the selected server and put it in the conversation as an inspect call and its
+ * result, so the agent that answers next has it exactly as if it had run it. The owner typed it, which is the
+ * approval: it is not held to the read-only list (a server that only allows reading still refuses it).
+ */
+export async function runOwnerCommand(command, conversation, onEvent, { signal, server: selected } = {}) {
+  const target = targetServer(undefined, defaultFor(selected));
+  const id = `owner-${randomUUID()}`;
+  const call = { id, type: "function", function: { name: "inspect", arguments: JSON.stringify({ command, ...(target.server ? { server: target.server } : {}) }) } };
+  conversation.push({ role: "assistant", content: null, tool_calls: [call] });
+  let result;
+  if (target.error) {
+    result = { error: `rejected: ${target.error}` };
+    onEvent({ type: "tool_call", tool: "inspect", command, server: target.server, rejected: target.error });
+  } else {
+    onEvent({ type: "tool_call", tool: "inspect", command, server: target.server });
+    const run = await runCommand(command, { signal, server: target.server });
+    if (run.stopped) {
+      onEvent({ type: "tool_result", tool: "inspect", command, server: target.server, ...run });
+      result = { error: "stopped by the owner" };
+    } else {
+      appendAudit({ id: randomUUID(), kind: "act", title: "Command you typed", by: "owner", command, ...(target.server ? { server: target.server } : {}), ...run });
+      onEvent({ type: "tool_result", tool: "inspect", command, server: target.server, ...run });
+      result = run;
+    }
+  }
+  conversation.push({ role: "tool", tool_call_id: id, content: JSON.stringify(result) });
+  return !signal?.aborted;
+}
+
 /** The manage_tasks tool. Tasks pin the server they were made for, so switching servers later does not move them. */
 function manageTasks(parsed, { dflt, fullAccess, model, onEvent }) {
   const action = String(parsed.action ?? "");

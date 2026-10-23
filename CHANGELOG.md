@@ -6,6 +6,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Command mode: start a message with ! to run a command yourself on the selected server (`!df -h`). It runs as typed,
+  shows in the chat like any command, and the agent then answers with the command and its output in front of it.
 - Rows, stats and key-value lines in the agent's views and in the live surfaces are clickable: a click asks the
   agent about that item, and hovering shows what it will ask. They look the same and work from the keyboard.
 - Tasks: the agent can set up work that happens on its own, by schedule (cron or every 30m) or by trigger (a read-only

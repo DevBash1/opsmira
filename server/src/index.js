@@ -19,7 +19,7 @@ import {
 import { retitle } from "./titles.js";
 import { conversationIdOf, describeTask, isFiring, listTasks, removeTask, startScheduler, updateTask } from "./tasks.js";
 import { fireTask, runCheck, waitingFor } from "./taskrun.js";
-import { defaultFor, pickServer, runTurn } from "./ai.js";
+import { defaultFor, ownerCommand, pickServer, runOwnerCommand, runTurn } from "./ai.js";
 import { getModels, getModelInfo } from "./models.js";
 import { contentImages, contentText, parseUserInput, userContent } from "./content.js";
 import { runCommand } from "./exec.js";
@@ -322,6 +322,10 @@ app.post("/api/chat", async (req, res) => {
     res.status(400).json({ error: input.error });
     return;
   }
+  if (ownerCommand(input.text) === "") {
+    res.status(400).json({ error: "Type a command after !" });
+    return;
+  }
   const model = await resolveModel(req.body?.model, undefined);
   const vision = await visionFor(model);
   if (input.images.length && !vision) {
@@ -359,6 +363,9 @@ app.post("/api/chat", async (req, res) => {
   conversation.push({ role: "user", content: userContent(input.text, input.images), ask: true });
 
   try {
+    // "!command": the owner's own command runs first, and the agent then answers with it in front of it.
+    const own = ownerCommand(input.text);
+    if (own) await runOwnerCommand(own, conversation, send, { signal: run.abort.signal, server: req.get("x-opsmira-server") });
     await runTurn(conversation, send, model, pendingApprovals, { signal: run.abort.signal, steers: run.steers, vision, fullAccess: req.body?.mode === "full", server: req.get("x-opsmira-server") });
   } catch (err) {
     if (!run.abort.signal.aborted) send({ type: "error", text: err.message, code: err.code });
