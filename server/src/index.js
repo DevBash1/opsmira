@@ -16,6 +16,7 @@ import {
   isAuthenticated,
   sessionIdFromRequest,
 } from "./auth.js";
+import { retitle } from "./titles.js";
 import { defaultFor, pickServer, runTurn } from "./ai.js";
 import { getModels, getModelInfo } from "./models.js";
 import { contentImages, contentText, parseUserInput, userContent } from "./content.js";
@@ -318,6 +319,7 @@ app.post("/api/chat", async (req, res) => {
     // Release first and synchronously: from here no steering message can join this turn.
     endRun(session, run);
     persistSession(session);
+    retitle(session);
     clearInterval(keepAlive);
     send({ type: "done" });
     res.end();
@@ -417,6 +419,7 @@ app.post("/api/approve", async (req, res) => {
   } finally {
     endRun(session, run);
     persistSession(session);
+    retitle(session);
   }
 
   res.json({ ok: true, proposal, audit, events });
@@ -462,6 +465,7 @@ app.post("/api/decline", async (req, res) => {
   } finally {
     endRun(session, run);
     persistSession(session);
+    retitle(session);
   }
 
   res.json({ ok: true, proposal, events });

@@ -6,6 +6,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Chats are named by the model after the first reply, and renamed from the last 10 messages each time another 50
+  of your messages have gone by (History shows the title). If the model cannot be reached the first message is used.
 - Connecting a server asks first: Linux or Mac, Windows, or a hosted app, and read only or run commands. The
   command shown matches the choice.
 - Windows agents: a PowerShell installer (`install.ps1`, a scheduled task that starts at boot) and PowerShell

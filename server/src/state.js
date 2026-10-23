@@ -30,7 +30,8 @@ function withoutImages(message) {
 
 function blank(id) {
   // `run` is the turn in flight ({ abort, steers, vision }); one at a time per conversation.
-  return { id, conversation: [], pendingApprovals: new Map(), run: null, lastModel: undefined, createdAt: new Date().toISOString() };
+  // `title` is the model-written name (null until it has one); `titledAt` is how many owner messages there were then.
+  return { id, conversation: [], pendingApprovals: new Map(), run: null, lastModel: undefined, title: null, titledAt: 0, titleTriedAt: 0, createdAt: new Date().toISOString() };
 }
 
 function revive(id, saved) {
@@ -38,6 +39,10 @@ function revive(id, saved) {
   session.conversation = Array.isArray(saved.conversation) ? saved.conversation : [];
   session.pendingApprovals = new Map((saved.proposals ?? []).map((p) => [p.id, p]));
   session.lastModel = saved.lastModel;
+  if (saved.titledAt) {
+    session.title = saved.title;
+    session.titledAt = saved.titledAt;
+  }
   session.createdAt = saved.createdAt ?? session.createdAt;
   return session;
 }
@@ -71,7 +76,8 @@ export function persistSession(session) {
   const updatedAt = new Date().toISOString();
   saveConversation(session.id, {
     id: session.id,
-    title: titleOf(session.conversation),
+    title: session.title || titleOf(session.conversation),
+    titledAt: session.titledAt || undefined,
     createdAt: session.createdAt,
     updatedAt,
     messages: session.conversation.filter((m) => m.role === "user" && m.ask).length,
