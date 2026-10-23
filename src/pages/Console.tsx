@@ -2090,7 +2090,9 @@ function ConsoleApp({
           className={`relative flex w-full max-w-[800px] shrink-0 flex-col items-stretch gap-[14px] rounded-[22px] bg-[var(--glass)] p-[18px_12px_12px_20px] transition-[outline-color,box-shadow] duration-300 ease-enter [box-shadow:0px_14px_40px_var(--shadow)] [outline-offset:-0.5px] ${
             // Full access turns the whole composer warm (rim, focus glow and the working light) so
             // the mode is never out of sight and never mixes with the usual green.
-            mode === "full"
+            commandMode
+              ? "[--cmd:#4f8cff] [outline:1px_solid_color-mix(in_oklab,var(--cmd)_55%,transparent)] focus-within:[box-shadow:0px_14px_40px_var(--shadow),0px_0px_0px_4px_color-mix(in_oklab,var(--cmd)_18%,transparent)] focus-within:[outline-color:var(--cmd)]"
+              : mode === "full"
               ? "[--edge-1:var(--danger)] [--edge-2:color-mix(in_oklab,var(--danger)_55%,var(--ink))] [outline:1px_solid_color-mix(in_oklab,var(--danger)_40%,transparent)] focus-within:[box-shadow:0px_14px_40px_var(--shadow),0px_0px_0px_4px_color-mix(in_oklab,var(--danger)_16%,transparent)] focus-within:[outline-color:color-mix(in_oklab,var(--danger)_70%,transparent)]"
               : "[outline:1px_solid_var(--hairline)] focus-within:[box-shadow:0px_14px_40px_var(--shadow),0px_0px_0px_4px_var(--glow)] focus-within:[outline-color:var(--accent)]"
           }`}
@@ -2193,11 +2195,11 @@ function ConsoleApp({
             {models.length > 0 && model && <ModelChip models={models} value={model} onChange={pickModel} attention={chipAttention} />}
             {commandMode && (
               <span
-                title="Runs exactly what you typed on the selected server, then the agent reads the result."
-                className="font-code hidden min-w-0 shrink items-center gap-[6px] truncate text-[11px] text-[var(--accent-strong)] motion-safe:animate-blur-rise sm:flex"
+                title="Runs what you typed on the selected server, then the agent reads the result."
+                className="font-code flex shrink-0 items-center gap-[6px] text-[11px] text-[#4f8cff] motion-safe:animate-blur-rise"
               >
                 <Icon name="terminal" className="h-[11px] w-[11px] shrink-0" />
-                <span className="truncate">Command · runs on {shownServer === "local" ? "this server" : shownServer.replace(/^agent:/, "")}</span>
+                Command
               </span>
             )}
             {/* One button: Send when idle; while the agent works it is Stop (a stop square inside the
