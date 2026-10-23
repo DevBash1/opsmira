@@ -6,6 +6,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Tasks: the agent can set up work that happens on its own, by schedule (cron or every 30m) or by trigger (a read-only
+  check that wakes it when a file changes, memory passes a line, a service stops...). Each task has its own chat,
+  asks before changes unless allowed, and is managed from a new Tasks panel. See docs/tasks.md.
 - Chats are named by the model after the first reply, and renamed from the last 10 messages each time another 50
   of your messages have gone by (History shows the title). If the model cannot be reached the first message is used.
 - Connecting a server asks first: Linux or Mac, Windows, or a hosted app, and read only or run commands. The

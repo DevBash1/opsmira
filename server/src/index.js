@@ -17,6 +17,8 @@ import {
   sessionIdFromRequest,
 } from "./auth.js";
 import { retitle } from "./titles.js";
+import { conversationIdOf, describeTask, isFiring, listTasks, removeTask, startScheduler, updateTask } from "./tasks.js";
+import { fireTask, runCheck, waitingFor } from "./taskrun.js";
 import { defaultFor, pickServer, runTurn } from "./ai.js";
 import { getModels, getModelInfo } from "./models.js";
 import { contentImages, contentText, parseUserInput, userContent } from "./content.js";
@@ -231,6 +233,51 @@ app.delete("/api/memory/:id", (req, res) => {
     return;
   }
   res.json({ ok: true });
+});
+
+/* ---------------- tasks ---------------- */
+
+const taskView = (t) => ({
+  id: t.id,
+  name: t.name,
+  kind: t.kind,
+  when: describeTask(t),
+  prompt: t.prompt,
+  server: t.server || undefined,
+  enabled: t.enabled,
+  fullAccess: t.fullAccess,
+  running: isFiring(t.id),
+  waiting: waitingFor(t),
+  conversationId: conversationIdOf(t),
+  runs: t.state.runs ?? 0,
+  lastRunAt: t.state.lastRunAt,
+  lastResult: t.state.lastResult,
+  lastError: t.state.lastError,
+  nextRunAt: t.kind === "schedule" ? t.state.nextRunAt : undefined,
+});
+
+app.get("/api/tasks", (req, res) => {
+  res.json({ tasks: listTasks().map(taskView) });
+});
+
+app.patch("/api/tasks/:id", (req, res) => {
+  const task = updateTask(req.params.id, { enabled: req.body?.enabled, fullAccess: req.body?.fullAccess });
+  if (!task) return res.status(404).json({ error: "No such task." });
+  res.json({ task: taskView(task) });
+});
+
+app.delete("/api/tasks/:id", (req, res) => {
+  const task = removeTask(req.params.id);
+  if (!task) return res.status(404).json({ error: "No such task." });
+  res.json({ ok: true });
+});
+
+app.post("/api/tasks/:id/run", (req, res) => {
+  const task = listTasks().find((t) => t.id === req.params.id);
+  if (!task) return res.status(404).json({ error: "No such task." });
+  if (isFiring(task.id)) return res.status(409).json({ error: "It is already running.", code: "busy" });
+  scheduler.run(task, "the owner ran it from the Tasks panel");
+  res.status(202).json({ task: taskView(task) });
 });
 
 app.get("/api/audit", (req, res) => {
@@ -496,6 +543,7 @@ if (existsSync(join(env.webDir, "index.html"))) {
 }
 
 startSampler();
+const scheduler = startScheduler({ fire: fireTask, check: runCheck });
 
 const server = app.listen(env.port, env.host, () => {
   console.log(`Opsmira server listening on http://${env.host}:${env.port}`);

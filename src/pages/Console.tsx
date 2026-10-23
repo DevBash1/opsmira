@@ -12,6 +12,7 @@ import { IconButton } from "../components/console/IconButton";
 import { ModelChip } from "../components/console/ModelChip";
 import { ModeChip } from "../components/console/ModeChip";
 import { WhereChip, setLocalLabel } from "../components/console/WhereChip";
+import { TasksPanel } from "../components/console/TasksPanel";
 import { ServerChip, type ServerOption } from "../components/console/ServerChip";
 import { Spinner } from "../components/console/Spinner";
 import { Popover } from "../components/console/Popover";
@@ -40,6 +41,7 @@ import {
   type ModelInfo,
   type Proposal,
   type ServerTurn,
+  type TaskInfo,
 } from "../lib/console-api";
 
 type ToolCall = {
@@ -84,6 +86,8 @@ type Turn = {
   memories: { action: "saved" | "forgot"; text: string }[];
   /** Artifacts the agent saved, read or deleted during the turn. */
   artifacts: { action: "saved" | "loaded" | "deleted"; id: string; title: string }[];
+  /** Tasks the agent set up, paused or removed during the turn. */
+  tasks: { action: "created" | "removed" | "paused" | "resumed"; id: string; name: string }[];
   error?: string;
   errorCode?: string;
   offline?: boolean;
@@ -103,6 +107,7 @@ const emptyTurn = (ask: string, images: string[] = []): Turn => ({
   suggestions: [],
   memories: [],
   artifacts: [],
+  tasks: [],
 });
 
 /** The latest turn as the server rebuilt it from the saved conversation. */
@@ -119,6 +124,7 @@ function turnFromServer(t: ServerTurn): Turn {
     suggestions: t.suggestions,
     memories: t.memories,
     artifacts: t.artifacts,
+    tasks: t.tasks ?? [],
     stopped: t.stopped,
     scene: t.scene,
   };
@@ -169,6 +175,7 @@ function applyEvent(turn: Turn, event: ChatEvent): Turn {
   if (event.type === "suggestions") return { ...turn, suggestions: event.items };
   if (event.type === "memory") return { ...turn, memories: [...turn.memories, { action: event.action, text: event.text }] };
   if (event.type === "artifact") return { ...turn, artifacts: [...turn.artifacts, { action: event.action, id: event.id, title: event.title }] };
+  if (event.type === "task") return { ...turn, tasks: [...turn.tasks, { action: event.action, id: event.id, name: event.name }] };
   if (event.type === "error") return { ...turn, error: event.text, errorCode: event.code };
   if (event.type === "steer") {
     return { ...turn, steers: turn.steers.map((s) => (s.id === event.id ? { ...s, state: "delivered" } : s)) };
@@ -587,6 +594,7 @@ function TurnBlock({
   onRetry,
   onAsk,
   onOpenArtifact,
+  onOpenTasks,
 }: {
   turn: Turn;
   busyProposal: string | null;
@@ -596,6 +604,7 @@ function TurnBlock({
   onRetry?: () => void;
   onAsk?: (prompt: string) => void;
   onOpenArtifact?: (id: string) => void;
+  onOpenTasks?: () => void;
 }) {
   // The thinking and one command's output share a single open slot: opening one closes the other.
   const [openPanel, setOpenPanel] = useState<string | null>(null);
@@ -666,6 +675,25 @@ function TurnBlock({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {turn.tasks.length > 0 && (
+        <div style={{ animationDelay: "70ms" }} className="flex w-full flex-col items-start gap-[6px] motion-safe:animate-blur-rise">
+          {turn.tasks.map((t, i) => (
+            <button
+              key={i}
+              type="button"
+              title="Open Tasks"
+              onClick={() => onOpenTasks?.()}
+              className="flex max-w-full min-w-0 cursor-pointer flex-row items-center gap-[7px] rounded-full bg-[var(--soft)] p-[4px_11px_4px_8px] text-[11.5px] text-[var(--muted)] transition-colors duration-200 ease-enter hover:bg-[var(--glow)]"
+            >
+              <Icon name="refresh-cw" className="h-[11px] w-[11px] shrink-0 text-[var(--accent-2)]" />
+              <span className="shrink-0">{{ created: "Task set up", removed: "Task removed", paused: "Task paused", resumed: "Task resumed" }[t.action]}</span>
+              <span className="min-w-0 truncate text-[var(--ink)]">{t.name}</span>
+              {t.action !== "removed" && <Icon name="arrow-up-right" className="h-[10px] w-[10px] shrink-0 text-[var(--muted)]" />}
+            </button>
+          ))}
         </div>
       )}
 
@@ -906,6 +934,8 @@ function ConsoleApp({
   const [showHistory, setShowHistory] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
   const [showArtifacts, setShowArtifacts] = useState(false);
+  const [showTasks, setShowTasks] = useState(false);
+  const [tasksWaiting, setTasksWaiting] = useState(0);
   const [artifactList, setArtifactList] = useState<ArtifactSummary[] | null>(null);
   const [openedArtifact, setOpenedArtifact] = useState<Artifact | null>(null);
   const [copiedArtifact, setCopiedArtifact] = useState(false);
@@ -962,6 +992,7 @@ function ConsoleApp({
   const historyButton = useRef<HTMLButtonElement>(null);
   const memoryButton = useRef<HTMLButtonElement>(null);
   const artifactsButton = useRef<HTMLButtonElement>(null);
+  const tasksButton = useRef<HTMLButtonElement>(null);
   const scenesButton = useRef<HTMLButtonElement>(null);
   const auditButton = useRef<HTMLButtonElement>(null);
   const themeButton = useRef<HTMLButtonElement>(null);
@@ -1055,15 +1086,25 @@ function ConsoleApp({
   const closeHistory = useCallback(() => setShowHistory(false), []);
   const closeMemory = useCallback(() => setShowMemory(false), []);
   const closeArtifacts = useCallback(() => setShowArtifacts(false), []);
+  const closeTasks = useCallback(() => setShowTasks(false), []);
+  const noteTasks = useCallback((list: TaskInfo[]) => setTasksWaiting(list.reduce((n, t) => n + t.waiting, 0)), []);
+  // A dot on the Tasks button while a task is waiting for an approval.
+  useEffect(() => {
+    const read = () => document.visibilityState === "visible" && api.tasks().then((r) => noteTasks(r.tasks)).catch(() => {});
+    read();
+    const t = window.setInterval(read, 20000);
+    return () => window.clearInterval(t);
+  }, [noteTasks]);
 
   /** One top-bar sheet open at a time. History, Memory and Artifacts fetch fresh data each time they open. */
-  const togglePanel = (panel: "scenes" | "audit" | "history" | "memory" | "artifacts") => {
-    const open = { scenes: showScenes, audit: showAudit, history: showHistory, memory: showMemory, artifacts: showArtifacts }[panel];
+  const togglePanel = (panel: "scenes" | "audit" | "history" | "memory" | "artifacts" | "tasks") => {
+    const open = { scenes: showScenes, audit: showAudit, history: showHistory, memory: showMemory, artifacts: showArtifacts, tasks: showTasks }[panel];
     setShowScenes(panel === "scenes" && !open);
     setShowAudit(panel === "audit" && !open);
     setShowHistory(panel === "history" && !open);
     setShowMemory(panel === "memory" && !open);
     setShowArtifacts(panel === "artifacts" && !open);
+    setShowTasks(panel === "tasks" && !open);
     if (open) return;
     if (panel === "scenes") {
       api.surfaces().then((r) => setSurfaces(r.surfaces)).catch(() => setSurfaces([]));
@@ -1083,6 +1124,7 @@ function ConsoleApp({
     setShowAudit(false);
     setShowHistory(false);
     setShowMemory(false);
+    setShowTasks(false);
     try {
       const [{ artifact }, list] = await Promise.all([api.artifact(id), api.artifacts()]);
       setArtifactList(list.artifacts);
@@ -1125,11 +1167,11 @@ function ConsoleApp({
   useEffect(() => {
     if (!preview) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !showScenes && !showAudit && !showHistory && !showMemory && !showArtifacts) setPreview(null);
+      if (e.key === "Escape" && !showScenes && !showAudit && !showHistory && !showMemory && !showArtifacts && !showTasks) setPreview(null);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [preview, showScenes, showAudit, showHistory, showMemory, showArtifacts]);
+  }, [preview, showScenes, showAudit, showHistory, showMemory, showArtifacts, showTasks]);
 
   // Servers that connected themselves: read on load, on focus, whenever the menu opens, and every few seconds.
   const loadAgents = useCallback(() => {
@@ -1535,7 +1577,7 @@ function ConsoleApp({
   // preview own a single Esc, so they keep it.
   escRef.current = (e: KeyboardEvent) => {
     if (e.key !== "Escape" || e.repeat) return;
-    const busyPanel = !!preview || showScenes || showAudit || showHistory || showMemory || showArtifacts;
+    const busyPanel = !!preview || showScenes || showAudit || showHistory || showMemory || showArtifacts || showTasks;
     if (busyPanel || input.trim() || attachments.length || !historyReady) {
       lastEsc.current = 0;
       return;
@@ -1594,6 +1636,7 @@ function ConsoleApp({
           onRetry={() => send(current.ask, current.images)}
           onAsk={(prompt) => send(prompt)}
           onOpenArtifact={openArtifact}
+          onOpenTasks={() => togglePanel("tasks")}
         />
         <AnimatePresence>
           {presence && (
@@ -1643,6 +1686,7 @@ function ConsoleApp({
             onClick={() => onToggleTheme(themeButton.current)}
           />
           <IconButton ref={historyButton} icon="history" label="History" active={showHistory} onClick={() => togglePanel("history")} />
+          <IconButton ref={tasksButton} icon="refresh-cw" label="Tasks" active={showTasks} dot={tasksWaiting > 0} onClick={() => togglePanel("tasks")} />
           <IconButton ref={artifactsButton} icon="file-text" label="Artifacts" active={showArtifacts} onClick={() => togglePanel("artifacts")} />
           <IconButton ref={memoryButton} icon="bookmark" label="Memory" active={showMemory} onClick={() => togglePanel("memory")} />
           <IconButton ref={scenesButton} icon="box" label="Surfaces" active={showScenes} onClick={() => togglePanel("scenes")} />
@@ -1829,6 +1873,22 @@ function ConsoleApp({
               ))}
             </AnimatePresence>
           </div>
+        </Popover>
+
+        <Popover
+          open={showTasks}
+          onClose={closeTasks}
+          anchorRef={tasksButton}
+          label="Tasks"
+          className="right-[14px] w-[min(520px,calc(100vw-28px))] sm:right-[28px]"
+        >
+          <TasksPanel
+            onChange={noteTasks}
+            onOpenChat={(id) => {
+              setShowTasks(false);
+              openConversation(id);
+            }}
+          />
         </Popover>
 
         <Popover

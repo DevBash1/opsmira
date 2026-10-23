@@ -112,6 +112,7 @@ export type ChatEvent =
   | { type: "memory"; action: "saved" | "forgot"; text: string }
   /** The agent saved, read or deleted an artifact. */
   | { type: "artifact"; action: "saved" | "loaded" | "deleted"; id: string; title: string }
+  | { type: "task"; action: "created" | "removed" | "paused" | "resumed"; id: string; name: string }
   /** A steering message reached the agent (id from api.steer). */
   | { type: "steer"; id: string }
   /** The owner stopped the turn; `dropped` are steering messages that never reached the agent. */
@@ -131,6 +132,7 @@ export interface ServerTurn {
   suggestions: string[];
   memories: { action: "saved" | "forgot"; text: string }[];
   artifacts: { action: "saved" | "loaded" | "deleted"; id: string; title: string }[];
+  tasks?: { action: "created" | "removed" | "paused" | "resumed"; id: string; name: string }[];
   stopped: boolean;
 }
 
@@ -191,6 +193,26 @@ async function json<T>(res: Response): Promise<T> {
 const post = (url: string, body: unknown) =>
   fetch(url, { method: "POST", headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
 
+/** Something the agent does on its own: on a schedule, or when a check crosses a line. */
+export type TaskInfo = {
+  id: string;
+  name: string;
+  kind: "schedule" | "trigger";
+  when: string;
+  prompt: string;
+  server?: string;
+  enabled: boolean;
+  fullAccess: boolean;
+  running: boolean;
+  waiting: number;
+  conversationId: string;
+  runs: number;
+  lastRunAt?: string;
+  lastResult?: string;
+  lastError?: string;
+  nextRunAt?: number;
+};
+
 /** A server that connected itself (opsmira-agent). `host` is what the surfaces take: agent:<name>. */
 export type AgentInfo = {
   id: string;
@@ -241,6 +263,11 @@ export const api = {
     post("/api/agents/token", options).then((r) => json<{ token: string; expiresAt: number; command: string; manual: string }>(r)),
   agentCredential: (options: { name: string; access: "read-only" | "operate" }) =>
     post("/api/agents/credential", options).then((r) => json<{ name: string; command: string }>(r)),
+  tasks: () => fetch("/api/tasks").then((r) => json<{ tasks: TaskInfo[] }>(r)),
+  updateTask: (id: string, patch: { enabled?: boolean; fullAccess?: boolean }) =>
+    fetch(`/api/tasks/${encodeURIComponent(id)}`, { method: "PATCH", headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify(patch) }).then((r) => json<{ task: TaskInfo }>(r)),
+  removeTask: (id: string) => fetch(`/api/tasks/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers() }).then((r) => json<{ ok: true }>(r)),
+  runTask: (id: string) => post(`/api/tasks/${encodeURIComponent(id)}/run`, {}).then((r) => json<{ task: TaskInfo }>(r)),
   removeAgent: (id: string) => fetch(`/api/agents/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers() }).then((r) => json<{ ok: true }>(r)),
   audit: () => fetch("/api/audit").then((r) => json<{ entries: AuditEntry[] }>(r)),
   models: () => fetch("/api/models").then((r) => json<{ models: ModelInfo[]; default: string }>(r)),

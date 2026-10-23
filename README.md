@@ -60,6 +60,7 @@ copied one-liner does what you think. Opsmira puts a conversation in front of th
 | **Asks, then acts** | Read-only inspections run on their own. Changes are proposals you approve, and everything is audited. A Stop button cancels a turn in flight. |
 | **Live surfaces** | Memory, CPU, network, disk, processes, logs, files, containers, services, schedules, TLS certificates, firewall exposure and storage cleanup, read from the real machine. |
 | **Any server** | Manage other hosts over SSH, or have a server connect itself with one command: no SSH keys, no open port. [Details](docs/self-hosting.md#connect-a-server-without-ssh-agent). |
+| **Works on its own** | Ask for a task: a schedule ("check disks every morning") or a trigger ("tell me if nginx.conf changes", "if memory passes 90%"). It wakes, looks into it, and asks before changing anything. [Details](docs/tasks.md). |
 | **Agent-composed views** | For data no built-in surface covers, the agent builds a view from stats, tables, charts, logs and key-values, and says where the data came from. |
 | **Memory and artifacts** | It remembers facts about your servers and keeps notes you can reopen. |
 | **Bring your own model** | Any model on [OpenRouter](https://openrouter.ai), including your own provider keys (BYOK). |

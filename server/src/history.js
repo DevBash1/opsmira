@@ -36,6 +36,7 @@ export function buildLastTurn(conversation, proposals) {
     suggestions: [],
     memories: [],
     artifacts: [],
+    tasks: [],
     stopped: false,
   };
   const calls = new Map();
@@ -89,6 +90,8 @@ export function buildLastTurn(conversation, proposals) {
       } else if (name === "save_artifact" || name === "load_artifact" || name === "delete_artifact") {
         const action = { saved: "saved", loaded: "loaded", deleted: "deleted" }[result.status];
         if (action) turn.artifacts.push({ action, id: String(result.id ?? ""), title: String(result.title ?? "") });
+      } else if (name === "manage_tasks") {
+        if (["created", "removed", "paused", "resumed"].includes(result.status)) turn.tasks.push({ action: result.status, id: String(result.id ?? ""), name: String(result.name ?? "") });
       } else if (name === "remember" || name === "forget") {
         if (result.status === "saved" || result.status === "forgot") {
           turn.memories.push({ action: result.status, text: String(result.text ?? "") });
