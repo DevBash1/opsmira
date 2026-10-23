@@ -93,9 +93,13 @@ export function SceneIntro({
 export function StatRow({
   items,
   className = "",
+  itemAsk,
+  onAsk,
 }: {
   items: { label: string; value: ReactNode; note?: ReactNode; badge?: ReactNode }[];
   className?: string;
+  itemAsk?: (item: number) => Askable;
+  onAsk?: (prompt: string) => void;
 }) {
   // Items wrap onto further rows when they don't fit (long values, narrow panels). Hairlines are
   // borders pulled outside the clipped box by -1px, so the first item of every row has no stray edge.
@@ -107,7 +111,8 @@ export function StatRow({
           return (
             <div
               key={i}
-              className="flex min-w-0 grow basis-full flex-col items-start gap-[6px] border-t border-l border-[var(--line)] px-[24px] py-[16px] sm:basis-[190px] sm:py-[18px]"
+              className={`flex min-w-0 grow basis-full flex-col items-start gap-[6px] border-t border-l border-[var(--line)] px-[24px] py-[16px] sm:basis-[190px] sm:py-[18px] ${askClass(itemAsk?.(i), onAsk)}`}
+              {...askProps(itemAsk?.(i), onAsk)}
             >
               <span className="font-code text-[10px] font-medium tracking-[1.1px] text-[var(--muted)]">{item.label}</span>
               <div className="flex max-w-full flex-row flex-wrap items-center gap-x-[9px] gap-y-[6px]">
@@ -305,6 +310,28 @@ export function StackedBar({
   );
 }
 
+/** A thing in a view that asks the agent about itself: clickable and keyboard-reachable, with a tooltip. Looks the same. */
+export type Askable = { prompt: string; hint: string };
+const FOCUS = "focus-visible:[outline:1.5px_solid_var(--accent)] focus-visible:[outline-offset:-2px]";
+function askProps(ask: Askable | undefined, onAsk: ((prompt: string) => void) | undefined) {
+  if (!ask || !onAsk) return {};
+  return {
+    tabIndex: 0,
+    title: ask.hint,
+    onClick: () => {
+      // Selecting text inside a row is not a click on the row.
+      if (window.getSelection()?.toString()) return;
+      onAsk(ask.prompt);
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      onAsk(ask.prompt);
+    },
+  };
+}
+const askClass = (ask: Askable | undefined, onAsk: unknown) => (ask && onAsk ? `cursor-pointer ${FOCUS}` : "");
+
 export function Table({
   title,
   detail,
@@ -314,12 +341,17 @@ export function Table({
   footer,
   minWidth = "min-w-[620px]",
   className = "",
+  rowAsk,
+  onAsk,
 }: {
   title?: ReactNode;
   detail?: ReactNode;
   right?: ReactNode;
   columns: { label: string; className?: string }[];
   rows: ReactNode[][];
+  /** Makes each row ask the agent about itself (with a tooltip), when `onAsk` is given. */
+  rowAsk?: (row: number) => Askable;
+  onAsk?: (prompt: string) => void;
   footer?: ReactNode;
   minWidth?: string;
   className?: string;
@@ -361,7 +393,8 @@ export function Table({
                 <tr
                   key={r}
                   style={rowFade(r >= TABLE_ROWS ? r - TABLE_ROWS : r)}
-                  className={`border-b border-[var(--hairline)] transition-colors duration-150 ease-enter last:border-0 hover:bg-[var(--soft)]/50 ${ROW_FADE}`}
+                  className={`border-b border-[var(--hairline)] transition-colors duration-150 ease-enter last:border-0 hover:bg-[var(--soft)]/50 ${ROW_FADE} ${askClass(rowAsk?.(r), onAsk)}`}
+                  {...askProps(rowAsk?.(r), onAsk)}
                 >
                   {row.map((cell, c) => (
                     <td key={c} className={`px-[16px] py-[12px] align-middle text-[12.5px] text-[var(--ink)] ${columns[c]?.className ?? ""}`}>
@@ -924,9 +957,9 @@ export function LiveMeta({ children }: { children: ReactNode }) {
   );
 }
 
-export function KeyValue({ label, value, tone }: { label: string; value: ReactNode; tone?: Tone }) {
+export function KeyValue({ label, value, tone, ask, onAsk }: { label: string; value: ReactNode; tone?: Tone; ask?: Askable; onAsk?: (prompt: string) => void }) {
   return (
-    <div className="flex flex-row items-baseline justify-between gap-[16px] py-[5px]">
+    <div className={`flex flex-row items-baseline justify-between gap-[16px] py-[5px] ${askClass(ask, onAsk)}`} {...askProps(ask, onAsk)}>
       <span className="text-[11.5px] text-[var(--muted)]">{label}</span>
       <span className={`font-code text-[11.5px] ${TONE_TEXT[tone ?? "muted"]}`}>{value}</span>
     </div>

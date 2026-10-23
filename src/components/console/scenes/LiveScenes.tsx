@@ -62,6 +62,8 @@ export function UptimeScene({ data, onAsk }: SceneProps) {
       {failed.length > 0 && (
         <Table
           title="Failed services"
+          onAsk={onAsk}
+          rowAsk={(n) => ({ hint: `Why did ${failed[n].name} fail?`, prompt: `Why did ${failed[n].name} fail? Check its status and recent logs.` })}
           columns={[{ label: "SERVICE" }, { label: "DESCRIPTION" }]}
           minWidth="min-w-[420px]"
           rows={failed.map((f) => [
@@ -74,6 +76,8 @@ export function UptimeScene({ data, onAsk }: SceneProps) {
         <Table
           title="Listening ports"
           detail={`${probes.length - down} of ${probes.length} answered a connection from this server`}
+          onAsk={onAsk}
+          rowAsk={(n) => ({ hint: `Ask about port ${probes[n].port}`, prompt: `What is listening on port ${probes[n].port} (${probes[n].process ?? "unknown process"}), and should it be?` })}
           columns={[{ label: "PORT" }, { label: "PROCESS" }, { label: "REACH" }, { label: "RESPONSE" }]}
           minWidth="min-w-[460px]"
           rows={probes.map((p) => [
@@ -87,6 +91,8 @@ export function UptimeScene({ data, onAsk }: SceneProps) {
       {services.length > 0 && (
         <Table
           title="Running services"
+          onAsk={onAsk}
+          rowAsk={(n) => ({ hint: `Ask about ${services[n].name}`, prompt: `Tell me about the ${services[n].name} service: its status, and anything in its recent logs that looks wrong.` })}
           detail={`${services.length} of ${d.running} shown`}
           columns={[{ label: "SERVICE" }, { label: "DESCRIPTION" }]}
           minWidth="min-w-[420px]"
@@ -182,6 +188,8 @@ export function CleanupScene({ data, onAsk }: SceneProps) {
       )}
       <Table
         title="Where the space is"
+        onAsk={onAsk}
+        rowAsk={(n) => ({ hint: `Look into ${items[n].label}`, prompt: `Look into "${items[n].label}": what is taking space there, and what is safe to remove?` })}
         detail="Measured now, largest first. Sizes are what the folder holds, not all of it is safe to remove."
         columns={[{ label: "WHAT" }, { label: "SIZE" }, { label: "NOTE" }, { label: "" }]}
         minWidth="min-w-[640px]"
@@ -223,6 +231,8 @@ export function TlsScene({ data, onAsk }: SceneProps) {
       />
       <Table
         title="Certificates"
+        onAsk={onAsk}
+        rowAsk={(n) => ({ hint: `Ask about ${certs[n].name}`, prompt: `Tell me about the certificate ${certs[n].name}: when it expires and whether it renews on its own.` })}
         detail="Soonest expiry first"
         columns={[{ label: "NAME" }, { label: "ISSUER" }, { label: "EXPIRES" }, { label: "LEFT" }]}
         minWidth="min-w-[560px]"

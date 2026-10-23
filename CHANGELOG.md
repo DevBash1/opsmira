@@ -6,6 +6,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Rows, stats and key-value lines in the agent's views and in the live surfaces are clickable: a click asks the
+  agent about that item, and hovering shows what it will ask. They look the same and work from the keyboard.
 - Tasks: the agent can set up work that happens on its own, by schedule (cron or every 30m) or by trigger (a read-only
   check that wakes it when a file changes, memory passes a line, a service stops...). Each task has its own chat,
   asks before changes unless allowed, and is managed from a new Tasks panel. See docs/tasks.md.

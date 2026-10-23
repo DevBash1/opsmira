@@ -8,11 +8,21 @@ import type { SceneProps } from "./DiagnosticScenes";
 const BADGE: Record<string, string> = { success: "Good", warn: "Check", danger: "Problem" };
 const mono = "font-code text-[11.5px]";
 
-function Block({ block }: { block: Record<string, any> }) {
+const clip = (text: unknown, n = 120) => {
+  const t = String(text ?? "").replace(/\s+/g, " ").trim();
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+};
+
+function Block({ block, onAsk }: { block: Record<string, any>; onAsk?: (prompt: string) => void }) {
   switch (block.type) {
     case "stats":
       return (
         <StatRow
+          onAsk={onAsk}
+          itemAsk={(n) => {
+            const i = block.items[n];
+            return { hint: `${i.label}: ${i.value}${i.note ? `. ${i.note}` : ""}. Click to ask about it.`, prompt: `Tell me more about "${clip(i.label)}" (${clip(i.value)}${i.note ? `, ${clip(i.note)}` : ""}).` };
+          }}
           items={block.items.map((i: any) => ({
             label: i.label,
             value: i.value,
@@ -26,6 +36,13 @@ function Block({ block }: { block: Record<string, any> }) {
         <Table
           title={block.title || undefined}
           detail={block.detail || undefined}
+          onAsk={onAsk}
+          rowAsk={(n) => {
+            const row = block.rows[n];
+            const first = clip(row[0]?.text, 60);
+            const detail = block.columns.map((c: string, k: number) => `${c}: ${clip(row[k]?.text)}`).join("; ");
+            return { hint: `Ask about "${first}"`, prompt: `Tell me more about "${first}"${block.title ? ` in "${clip(block.title, 60)}"` : ""}: ${detail}. What does it mean, and what can I do with it?` };
+          }}
           minWidth={block.columns.length > 4 ? "min-w-[640px]" : "min-w-[420px]"}
           columns={block.columns.map((label: string) => ({ label: label.toUpperCase() }))}
           rows={block.rows.map((row: any[]) =>
@@ -65,7 +82,14 @@ function Block({ block }: { block: Record<string, any> }) {
           {block.title && <span className="font-code text-[10px] tracking-[1.1px] text-[var(--muted)]">{String(block.title).toUpperCase()}</span>}
           <div className="divide-y divide-[var(--line)]">
             {block.items.map((i: any, n: number) => (
-              <KeyValue key={n} label={i.label} value={i.value} tone={i.tone as Tone | undefined} />
+              <KeyValue
+                key={n}
+                label={i.label}
+                value={i.value}
+                tone={i.tone as Tone | undefined}
+                onAsk={onAsk}
+                ask={{ hint: `${i.label}: ${i.value}. Click to ask about it.`, prompt: `Tell me more about "${clip(i.label)}": ${clip(i.value)}.` }}
+              />
             ))}
           </div>
         </Panel>
@@ -93,7 +117,7 @@ export function ComposedScene({ data, onAsk }: SceneProps) {
     <div className="flex w-full flex-col gap-[22px]">
       <SceneIntro eyebrow={d.eyebrow || "Read from the server"} title={d.title ?? ""} summary={d.summary ?? ""} icon={d.icon ?? "activity"} />
       {blocks.map((b, i) => (
-        <Block key={i} block={b} />
+        <Block key={i} block={b} onAsk={onAsk} />
       ))}
       <div className="flex w-full flex-row flex-wrap items-center justify-between gap-[12px]">
         <SceneFooter>

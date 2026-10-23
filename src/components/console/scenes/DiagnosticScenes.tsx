@@ -134,6 +134,8 @@ export function CpuScene({ data, onAsk }: SceneProps) {
       {top.length > 0 && (
         <Table
           title="Busiest processes"
+          onAsk={onAsk}
+          rowAsk={(n) => ({ hint: `Look into ${top[n].command}`, prompt: `Look into ${top[n].command} (PID ${top[n].pid}): what is it doing and is its CPU use normal?` })}
           detail="Measured over the last half second"
           columns={[{ label: "PROCESS" }, { label: "PID" }, { label: "USER" }, { label: "CPU" }, { label: "MEMORY" }]}
           minWidth="min-w-[480px]"
@@ -201,6 +203,8 @@ export function NetworkScene({ data, onAsk }: SceneProps) {
       />
       <Table
         title="Interfaces"
+        onAsk={onAsk}
+        rowAsk={(n) => ({ hint: `Ask about ${ifaces[n].name}`, prompt: `Tell me about the ${ifaces[n].name} network interface: its traffic, errors, and whether anything looks wrong.` })}
         detail="Totals since boot, rates averaged over the last few seconds"
         minWidth="min-w-[560px]"
         columns={[{ label: "NAME" }, { label: "IN" }, { label: "OUT" }, { label: "RECEIVED" }, { label: "SENT" }, { label: "ERRORS" }]}
@@ -252,6 +256,8 @@ export function DiskScene({ data, onAsk }: SceneProps) {
       </div>
       <Table
         title="Filesystems"
+        onAsk={onAsk}
+        rowAsk={(n) => ({ hint: `What is using ${ordered[n].mount}?`, prompt: `What is using the space on ${ordered[n].mount}?` })}
         detail="Every mounted disk, fullest first"
         columns={[{ label: "MOUNT" }, { label: "SIZE" }, { label: "USED" }, { label: "AVAILABLE" }, { label: "USE" }]}
         rows={ordered.map((m) => [
@@ -294,6 +300,8 @@ export function ProcessesScene({ data, onAsk }: SceneProps) {
       />
       <Table
         title="Top processes"
+        onAsk={onAsk}
+        rowAsk={(n) => ({ hint: `Inspect ${rows[n].name}`, prompt: `Inspect ${rows[n].name} (PID ${rows[n].pid}) in more detail: command line, open files and recent errors.` })}
         detail="CPU as ps reports it: time used divided by time running"
         columns={[{ label: "PROCESS" }, { label: "PID" }, { label: "USER" }, { label: "CPU" }, { label: "MEMORY" }, { label: "STATE" }]}
         rows={rows.map((p) => {
@@ -392,6 +400,8 @@ export function InventoryScene({ data, onAsk }: SceneProps) {
       </div>
       <Table
         title="Containers"
+        onAsk={onAsk}
+        rowAsk={(n) => ({ hint: `Diagnose ${rows[n].name}`, prompt: `Diagnose the container ${rows[n].name}.` })}
         detail="Ones that need attention first"
         columns={[{ label: "CONTAINER" }, { label: "IMAGE" }, { label: "STATUS" }, { label: "PORTS" }]}
         rows={rows.map((c) => [
@@ -495,6 +505,11 @@ export function FilesScene({ data, onAsk }: SceneProps) {
           }
           right={<Tag>Read-only</Tag>}
           columns={[{ label: "NAME" }, { label: "SIZE" }, { label: "MODIFIED" }]}
+          onAsk={onAsk}
+          rowAsk={(n) => ({
+            hint: items[n].dir ? `Open ${items[n].name}` : `Ask about ${items[n].name}`,
+            prompt: items[n].dir ? `List ${path.replace(/\/$/, "")}/${items[n].name}` : `Tell me about the file ${path.replace(/\/$/, "")}/${items[n].name}: what it is and what is in it.`,
+          })}
           rows={rows}
         />
       )}
