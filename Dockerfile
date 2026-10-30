@@ -27,6 +27,14 @@ COPY --from=web /app/dist ./dist
 RUN mkdir -p /data && chown -R node:node /data
 USER node
 VOLUME /data
+# What this build is, for the update check (set by the image and release workflows). Last, so a new commit
+# does not invalidate the cached layers above.
+ARG OPSMIRA_VERSION=""
+ARG OPSMIRA_COMMIT=""
+ARG OPSMIRA_CHANNEL=""
+ENV OPSMIRA_VERSION=$OPSMIRA_VERSION \
+    OPSMIRA_COMMIT=$OPSMIRA_COMMIT \
+    OPSMIRA_CHANNEL=$OPSMIRA_CHANNEL
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/api/me').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server/src/index.js"]

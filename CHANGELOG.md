@@ -6,6 +6,17 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Servers can ask to join: an agent started without a token (or with a used one) shows up under Connect a server
+  with its hostname, address and requested access. Accept pairs it; Decline makes it uninstall itself. Requests
+  never expire; they are capped and rate limited per address. Install tokens work once and no longer expire.
+- Agents update themselves when the console ships a new one: download from the console, sha256 check, test run,
+  restart into it, and fall back if it cannot connect. `--no-auto-update` opts out.
+- Update check: the console compares its build with GitHub (latest release, or main for `:edge` builds) and shows
+  an Update button that asks the AI to update it the right way for how it is installed.
+- Detach mode: for changes that take the console down while they run, the AI hands the job to a connected server
+  that runs it on its own with the model, logs every step, and reports back into the chat. An `opsmira` command on
+  that server follows the run and talks to it (`opsmira watch`, `say`, `stop`). Always approved first; every
+  command lands in Activity. See docs/detach.md.
 - Command mode: start a message with ! to run a command yourself on the selected server (`!df -h`). It runs as typed,
   shows in the chat like any command, and the agent then answers with the command and its output in front of it.
 - Rows, stats and key-value lines in the agent's views and in the live surfaces are clickable: a click asks the
@@ -23,6 +34,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   app under the agent so every deploy reconnects as the same server and its output can be read.
 
 ### Fixed
+- The "connection lost" screen showed made-up servers, routes and paused actions. It now shows when the
+  connection dropped, whether the console answers again (checked live), and points to Activity before "Send again".
 - Every command and approval card now says where it runs: the connected server's name, or "this server" (or
   "Opsmira container" when a default server is set) for the machine Opsmira is on. Local commands used to show no tag.
 - A hosted app's agent no longer hangs after SIGTERM when a child process outlives the app, and no longer drops the

@@ -5,7 +5,9 @@
 #
 # Options:
 #   --server URL     the console's agent address (required)
-#   --token TOKEN    the one-time token from the console (required the first time)
+#   --token TOKEN    the token from the console (works once, does not expire). Without one, or with one that
+#                    was used already, the server asks to join: the console owner accepts it, or declines it and
+#                    the agent removes itself from this server
 #   --name NAME      how the server is named in the console (default: this hostname)
 #   --access MODE    read-only (default) or operate (lets the console run commands here)
 #   --run-as USER    the account the agent runs as. Default: the user who ran sudo, so it can see that user's
@@ -14,12 +16,14 @@
 #   --install-node   if this machine has no Node 22+, download one for the agent only (checksum verified,
 #                    kept in /opt/opsmira-agent/node, the system Node is left alone)
 #   --node PATH      run the agent with this Node 22+ binary
+#   --no-auto-update keep this agent version (by default it updates itself when the console ships a new one)
 #   --dry-run        print what would be done and change nothing
 #   --uninstall      stop and remove the service (the console entry is removed in its Surfaces menu)
 set -eu
 
-SERVER="" TOKEN="" NAME="" ACCESS="read-only" RUN_AS="" DRY=0 UNINSTALL=0 INSTALL_NODE=0 NODE_BIN=""
+SERVER="" TOKEN="" NAME="" ACCESS="read-only" RUN_AS="" DRY=0 UNINSTALL=0 INSTALL_NODE=0 NODE_BIN="" NO_UPDATE=""
 DIR=/opt/opsmira-agent
+DECLINED=78
 STATE_DIR=/var/lib/opsmira-agent
 ENV_FILE=/etc/opsmira-agent.env
 UNIT=/etc/systemd/system/opsmira-agent.service
@@ -37,9 +41,10 @@ while [ $# -gt 0 ]; do
     --run-as) RUN_AS="${2:-}"; shift 2 ;;
     --install-node) INSTALL_NODE=1; shift ;;
     --node) NODE_BIN="${2:-}"; shift 2 ;;
+    --no-auto-update) NO_UPDATE=" --no-auto-update"; shift ;;
     --dry-run) DRY=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
-    -h|--help) sed -n '2,15p' "$0" 2>/dev/null || true; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0" 2>/dev/null || true; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
 done
@@ -47,7 +52,7 @@ done
 if [ "$UNINSTALL" = 1 ]; then
   [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || die "run as root (sudo)"
   run systemctl disable --now opsmira-agent 2>/dev/null || true
-  run rm -f "$UNIT" "$ENV_FILE"
+  run rm -f "$UNIT" "$ENV_FILE" /usr/local/bin/opsmira
   run rm -rf "$DIR" "$STATE_DIR"
   run systemctl daemon-reload
   say "Removed. The user '$RUN_AS' was left in place; delete it with: userdel $RUN_AS"
@@ -89,8 +94,10 @@ ORIGIN=$(printf '%s' "$SERVER" | sed -e 's#^wss://#https://#' -e 's#^ws://#http:
 say "Installing opsmira-agent ($ACCESS) for $ORIGIN as '$NAME', running as '$RUN_AS'."
 case "$SERVER" in ws://localhost*|ws://127.*) ;; ws://*) say "Warning: ws:// is not encrypted. Use an https:// console (wss://) so the credential is not sent in the clear." ;; esac
 
+CREATED_USER=0
 if ! id "$RUN_AS" >/dev/null 2>&1; then
   run useradd --system --home-dir "$STATE_DIR" --shell /usr/sbin/nologin "$RUN_AS"
+  CREATED_USER=1
 fi
 run mkdir -p "$DIR" "$STATE_DIR"
 # A real person's account keeps its own home (so ~ and their projects are where they expect); a service account uses the state directory.
@@ -120,6 +127,8 @@ if [ "$NEED_NODE" = 1 ]; then
   fi
 fi
 run curl -fsSL "$ORIGIN/agent/opsmira-agent.mjs" -o "$DIR/opsmira-agent.mjs"
+# A version the agent downloaded for itself would otherwise win over the one just installed.
+run rm -f "$STATE_DIR/opsmira-agent.update.mjs"
 run chown -R "$RUN_AS" "$STATE_DIR"
 
 # A read-only agent cannot gain privileges. One that may run commands is left able to use sudo if you grant it.
@@ -128,8 +137,23 @@ HARDEN="NoNewPrivileges=true"
 
 if [ "$DRY" = 1 ]; then
   say "+ write $ENV_FILE (mode 600) with the token"
+  say "+ write $DIR/uninstall.sh"
   say "+ write $UNIT"
 else
+  # What the service runs (as root, through ExecStopPost) when the console owner declines this server.
+  DELUSER=""
+  [ "$CREATED_USER" = 1 ] && DELUSER="userdel $RUN_AS 2>/dev/null || true"
+  cat > "$DIR/uninstall.sh" <<UNEOF
+#!/bin/sh
+# Written by the opsmira-agent installer. Removes the agent; the service runs it when the console declines this server.
+systemctl disable opsmira-agent 2>/dev/null || true
+systemctl stop opsmira-agent 2>/dev/null || true
+rm -f $UNIT $ENV_FILE /usr/local/bin/opsmira
+rm -rf $DIR $STATE_DIR
+systemctl daemon-reload
+$DELUSER
+UNEOF
+  chmod 700 "$DIR/uninstall.sh"
   # The token is only needed until the agent has paired once; it is stored with mode 600.
   umask 077
   { printf 'OPSMIRA_SERVER=%s\n' "$SERVER"; [ -z "$TOKEN" ] || printf 'OPSMIRA_TOKEN=%s\n' "$TOKEN"; } > "$ENV_FILE"
@@ -145,9 +169,16 @@ Wants=network-online.target
 User=$RUN_AS
 EnvironmentFile=$ENV_FILE
 Environment=HOME=$AGENT_HOME
-ExecStart=$NODE_BIN $DIR/opsmira-agent.mjs --name $NAME --access $ACCESS --state $STATE_DIR/state.json
+# Tells the agent this service restarts it (after it updates itself).
+Environment=OPSMIRA_SUPERVISED=systemd
+ExecStart=$NODE_BIN $DIR/opsmira-agent.mjs --name $NAME --access $ACCESS --state $STATE_DIR/state.json$NO_UPDATE
 Restart=always
 RestartSec=3
+# Declined by the console owner (exit $DECLINED): do not restart, remove the agent (as root, outside this unit).
+RestartPreventExitStatus=$DECLINED
+ExecStopPost=+/bin/sh -c '[ "\$\$EXIT_STATUS" = $DECLINED ] && systemd-run --no-block --collect --unit=opsmira-agent-remove /bin/sh $DIR/uninstall.sh || true'
+# A detached run (docs/detach.md) and its commands outlive a restart of the agent itself.
+KillMode=process
 $HARDEN
 
 [Install]
@@ -158,7 +189,11 @@ run systemctl daemon-reload
 run systemctl enable --now opsmira-agent
 
 say ""
-say "Done. It should appear as 'agent:$NAME' in the console's Surfaces menu in a few seconds."
+if [ -n "$TOKEN" ]; then
+  say "Done. It should appear as 'agent:$NAME' in the console's Surfaces menu in a few seconds."
+else
+  say "Done. It is asking to join: accept it in the console (Surfaces, Connect a server). Declining it removes the agent from this server."
+fi
 say "Logs: journalctl -u opsmira-agent -f"
 if [ "$RUN_AS" = opsmira-agent ]; then
   say "It runs as the service account 'opsmira-agent', which cannot read other users' home directories. Re-run with --run-as YOUR_USER to let it see your projects."

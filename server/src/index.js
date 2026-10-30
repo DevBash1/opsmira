@@ -28,7 +28,9 @@ import { appendAudit, deleteArtifact, listArtifacts, listConversations, readArti
 import { buildLastTurn, rewindLast } from "./history.js";
 import { startSampler } from "./metrics.js";
 import { knownHosts } from "./machine.js";
-import { AGENT_PATH, attachAgentGateway, createAgentCredential, createPairingToken, listAgents, revokeAgent } from "./agents.js";
+import { checkForUpdate, updateStatus } from "./update.js";
+import { listDetached, startDetached, tellDetached } from "./detach.js";
+import { AGENT_PATH, acceptRequest, attachAgentGateway, createAgentCredential, createPairingToken, declineRequest, listAgents, listRequests, revokeAgent } from "./agents.js";
 import { collectSurface, surfaceList } from "./surfaces.js";
 
 const app = express();
@@ -138,10 +140,9 @@ app.get("/api/surfaces", (req, res) => {
 });
 
 app.get("/api/agents", (req, res) => {
-  res.json({ agents: listAgents(), defaultServer: env.defaultServer });
+  res.json({ agents: listAgents(), requests: listRequests(), defaultServer: env.defaultServer });
 });
 
-/** A one-time command that connects a server to this console. */
 /** The command to run on the server, for its OS and the access the owner chose. `command` installs a service that survives reboots; `manual` runs it once by hand. */
 function agentCommands({ origin, ws, token, os, access }) {
   const operate = access === "operate";
@@ -158,12 +159,11 @@ function agentCommands({ origin, ws, token, os, access }) {
 }
 
 app.post("/api/agents/token", (req, res) => {
-  const { token, expiresAt } = createPairingToken();
+  const { token } = createPairingToken();
   const origin = `${req.protocol}://${req.get("host")}`;
   const ws = origin.replace(/^http/, "ws") + AGENT_PATH;
   res.json({
     token,
-    expiresAt,
     ...agentCommands({ origin, ws, token, os: req.body?.os, access: req.body?.access }),
   });
 });
@@ -180,6 +180,42 @@ app.post("/api/agents/credential", (req, res) => {
     host,
     command: `curl -fsSL ${origin}/agent/opsmira-agent.mjs -o opsmira-agent.mjs && OPSMIRA_CREDENTIAL=${credential} node opsmira-agent.mjs --server ${ws}${access} --exec "<your start command>"`,
   });
+});
+
+/** This build, and whether a newer Opsmira is out (checked every few hours; POST to check now). */
+app.get("/api/update", (req, res) => {
+  res.json(updateStatus());
+});
+app.post("/api/update/check", async (req, res) => {
+  await checkForUpdate();
+  res.json(updateStatus());
+});
+
+/** Jobs handed to a server to run on its own (detach), newest first; and a message or a stop for one. */
+app.get("/api/detached", (req, res) => {
+  res.json({ runs: listDetached() });
+});
+app.post("/api/detached/:id/:what", async (req, res) => {
+  if (!["say", "stop"].includes(req.params.what)) {
+    res.status(404).json({ error: "Unknown action" });
+    return;
+  }
+  const r = await tellDetached(req.params.id, req.params.what === "stop" ? { stop: true } : { text: req.body?.text });
+  res.status(r.ok ? 200 : 400).json(r);
+});
+
+/** A server that asked to join: let it in, or turn it away (it uninstalls itself). */
+app.post("/api/agents/requests/:id/:answer", (req, res) => {
+  const done = req.params.answer === "accept" ? acceptRequest(req.params.id) : req.params.answer === "decline" ? declineRequest(req.params.id) : null;
+  if (done === null) {
+    res.status(404).json({ error: "Unknown answer" });
+    return;
+  }
+  if (!done) {
+    res.status(404).json({ error: "No such request (it may have been answered already)" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 app.delete("/api/agents/:id", (req, res) => {
@@ -446,8 +482,9 @@ app.post("/api/approve", async (req, res) => {
   const events = [];
   let audit;
   try {
-    // No abort signal: Stop never kills a change the owner approved halfway through.
-    const result = await runCommand(proposal.command, { server: proposal.server });
+    // No abort signal: Stop never kills a change the owner approved halfway through. A detached run is started
+    // on its server instead (it then runs there on its own and reports back).
+    const result = proposal.kind === "detach" ? await startDetached(proposal, session.id, { console: `${req.protocol}://${req.get("host")}` }) : await runCommand(proposal.command, { server: proposal.server });
     proposal.status = "approved";
     proposal.result = result;
     audit = appendAudit({ id: randomUUID(), kind: "act", approvalId: id, command: proposal.command, title: proposal.title, ...(proposal.server ? { server: proposal.server } : {}), ...result });
@@ -556,3 +593,5 @@ const server = app.listen(env.port, env.host, () => {
   console.log(`Opsmira server listening on http://${env.host}:${env.port}`);
 });
 attachAgentGateway(server);
+// The first update check a little after start (not in tests); later ones happen when the console asks.
+if (process.env.NODE_ENV !== "test") setTimeout(() => checkForUpdate(), 20_000).unref();

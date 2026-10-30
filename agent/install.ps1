@@ -74,7 +74,8 @@ Invoke-WebRequest "$origin/agent/opsmira-agent.mjs" -OutFile $agentFile
 
 # Re-running keeps the saved credential, and stops the old copy first.
 Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-$argList = "`"$agentFile`" --server $Server --access $Access --state `"$stateFile`""
+# --supervised: the task runs it, so a decline removes the task and this folder.
+$argList = "`"$agentFile`" --server $Server --access $Access --state `"$stateFile`" --supervised windows-task"
 if ($Name) { $argList += " --name $Name" }
 if (-not (Test-Path $stateFile)) { $argList += " --token $Token" }
 

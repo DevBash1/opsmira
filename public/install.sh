@@ -182,6 +182,7 @@ Wants=network-online.target
 User=opsmira
 WorkingDirectory=$DIR/app/server
 EnvironmentFile=$ENV_FILE
+Environment=OPSMIRA_INSTALL=systemd
 ExecStart=$(command -v node) src/index.js
 Restart=always
 RestartSec=3

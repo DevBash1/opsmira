@@ -11,6 +11,14 @@ operating-system user it runs under. That is the product, and also the risk.
   break, and never on production.
 - Run it as a dedicated user with only the access you want it to have. Use SSH keys limited to what it needs.
 - The read-only check is a safety net, not a sandbox. Treat anyone who can sign in as able to run commands.
+- Connected agents update themselves from the console they paired with, read-only ones included. Read-only still
+  blocks commands, but whoever controls the console controls the agent's code; start an agent with
+  `--no-auto-update` to keep its version fixed.
+- A detached run (docs/detach.md) sends the model API key to that server for the length of the run and runs its
+  commands without approving each one. It always needs your approval, every command lands in the audit log, and
+  the key is deleted when the run ends.
+- Anyone who can reach the console can ask to connect a server. Requests are capped and rate limited, and nothing
+  is connected until you accept it.
 
 ## Deploying safely
 

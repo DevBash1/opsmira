@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "../../Icons";
 import type { Proposal } from "../../../lib/console-api";
 import { Collapse } from "../Collapse";
@@ -6,7 +6,6 @@ import { ResolvedPill } from "../ResolvedPill";
 import { WhereChip } from "../WhereChip";
 import {
   Action,
-  KeyValue,
   Notice,
   Panel,
   SceneFooter,
@@ -301,6 +300,64 @@ function LiveDestructive({
   );
 }
 
+/* Detached run ---------------------------------------------------------- */
+/** A job the agent wants to hand to a server to run on its own: the goal, the plan, the budget and what leaves the
+ *  console (the model key) are all on the card, because nothing after this is approved command by command. */
+export function DetachScene({ proposal, busy = false, locked = false, onApprove, onDecline }: { proposal: Proposal } & LiveApproval) {
+  const [details, setDetails] = useState(false);
+  const pending = proposal.status === "pending";
+  const approved = proposal.status === "approved";
+  const d = proposal.detach;
+  const server = (proposal.server ?? "").replace(/^agent:/, "");
+  return (
+    <div className="flex w-full flex-col items-start">
+      {!pending && <ResolvedPill proposal={proposal} expanded={details} onToggle={() => setDetails((v) => !v)} />}
+      <Collapse open={pending || details}>
+        <div className={`flex w-full flex-col gap-[16px] ${pending ? "" : "pt-[18px]"}`}>
+          <div className="flex flex-row flex-wrap items-center justify-between gap-[10px]">
+            <span className="font-code text-[10.5px] tracking-[0.6px] text-[var(--muted)]">Hand it to {server} · runs on its own there</span>
+            <Tag tone={pending ? "warn" : approved ? "success" : "neutral"}>{pending ? "AWAITING YOUR APPROVAL" : approved ? "APPROVED · HANDED OVER" : "DECLINED"}</Tag>
+          </div>
+          <h2 className="font-display max-w-[760px] text-[28px] leading-[1.1] font-semibold tracking-[-1px] text-[var(--ink)] sm:text-[32px]">{proposal.title}</h2>
+          <p className="max-w-[720px] text-[13.5px] leading-[1.6] text-[var(--muted)]">{d?.why ?? proposal.context}</p>
+          <Panel className="flex w-full flex-col gap-[12px] p-[16px_18px]">
+            <div className="flex flex-col gap-[4px]">
+              <span className="font-code text-[9.5px] tracking-[1px] text-[var(--muted)]">GOAL</span>
+              <span className="text-[13px] leading-[1.55] text-[var(--ink)]">{d?.goal}</span>
+            </div>
+            <div className="flex flex-col gap-[4px]">
+              <span className="font-code text-[9.5px] tracking-[1px] text-[var(--muted)]">PLAN</span>
+              <span className="font-code text-[11.5px] leading-[1.65] whitespace-pre-wrap text-[var(--ink)]">{d?.plan}</span>
+            </div>
+            <div className="flex flex-row flex-wrap gap-x-[18px] gap-y-[4px] border-t border-[var(--hairline)] pt-[10px] text-[11px] text-[var(--muted)]">
+              <span>Server · <span className="font-code text-[var(--ink)]">{server}</span></span>
+              {d && <span>Up to {d.minutes} min · {d.maxSteps} steps</span>}
+              <span>Follow it there · <span className="font-code text-[var(--ink)]">opsmira watch</span></span>
+            </div>
+          </Panel>
+          <Notice tone="warn" title="What you are approving" icon="triangle-alert">
+            {proposal.riskDetail} The model key is deleted from the server when the run ends, and the report comes back into this chat.
+          </Notice>
+          {pending ? (
+            <div className="flex w-full flex-row flex-wrap items-center justify-end gap-[8px]">
+              <Action onClick={onDecline} disabled={busy || locked}>
+                Deny
+              </Action>
+              <Action variant="primary" onClick={() => onApprove?.()} disabled={busy || locked}>
+                {busy ? "Handing over…" : "Approve & hand over"}
+              </Action>
+            </div>
+          ) : (
+            <span className="font-code text-[11px] text-[var(--muted)]">
+              {approved ? (proposal.result?.output ?? "Handed over") : "Nothing was handed over · logged to audit trail"}
+            </span>
+          )}
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
 /* 26 · Elevated permission -------------------------------------------- */
 export function PermissionScene({ proposal, busy, locked, onApprove, onDecline }: SceneProps & LiveApproval) {
   if (proposal) {
@@ -443,60 +500,58 @@ function DestructivePreview() {
   );
 }
 
-/* 30 · Reconnecting --------------------------------------------------- */
-export function OfflineScene({ onRetry }: { onRetry?: () => void }) {
+/* 30 · Connection lost ------------------------------------------------- */
+/** The browser lost its stream to the console mid-reply. Only what is known is shown: when it dropped, whether
+ *  the console answers now (checked live), and what the console does with a turn whose stream drops. */
+export function OfflineScene({ at, onRetry, onOpenActivity }: { at?: string; onRetry?: () => void; onOpenActivity?: () => void }) {
+  const [reachable, setReachable] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    let timer = 0;
+    const check = () =>
+      fetch("/api/me", { cache: "no-store" })
+        .then((r) => r.status < 500, () => false)
+        .then((ok) => {
+          if (!alive) return;
+          setReachable(ok);
+          if (!ok) timer = window.setTimeout(check, 4000);
+        });
+    check();
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, []);
+  const when = at ? new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : null;
   return (
     <div className="flex w-full flex-col gap-[18px]">
       <div className="flex flex-row flex-wrap items-center justify-between gap-[10px]">
-        <span className="font-code text-[10.5px] tracking-[0.6px] text-[var(--muted)]">Lost SSH session to web-01 at 14:32:07</span>
-        <Tag tone="warn">RECONNECTING · ATTEMPT 3 OF 5</Tag>
+        <span className="font-code text-[10.5px] tracking-[0.6px] text-[var(--muted)]">Connection to the console lost{when ? ` at ${when}` : ""}</span>
+        <Tag tone={reachable ? "success" : "warn"}>
+          {reachable === null ? "CHECKING THE CONSOLE" : reachable ? "CONSOLE REACHABLE AGAIN" : "CONSOLE UNREACHABLE · CHECKING EVERY 4 S"}
+        </Tag>
       </div>
       <h2 className="font-display max-w-[760px] text-[30px] leading-[1.08] font-semibold tracking-[-1.1px] text-[var(--ink)] sm:text-[36px]">
-        Production dropped off. Your work is safe.
+        The connection dropped before the reply finished.
       </h2>
       <p className="max-w-[720px] text-[13.5px] leading-[1.6] text-[var(--muted)]">
-        Nothing was mid-flight when it happened. I've paused your queue and I'm retrying with backoff — you can keep reading while I reconnect.
+        When the connection drops, the console stops the reply. A command that was running at that moment was stopped too and may have partly
+        completed, so check Activity before sending this again. A command that restarts the web server or proxy you reach the console through
+        drops the connection this way.
       </p>
-      <Panel className="flex w-full flex-col gap-[10px] p-[16px_18px]">
-        <div className="flex w-full flex-row flex-wrap items-center justify-between gap-[8px]">
-          <span className="font-display text-[15px] font-semibold text-[var(--ink)]">Route health</span>
-          <span className="font-code text-[10px] text-[var(--muted)]">last ok 14:32:06</span>
-        </div>
-        {[
-          ["You", "online · 18 ms", "success"],
-          ["Opsmira relay", "eu-west · timeout", "warn"],
-          ["web-01", "unreachable", "danger"],
-        ].map(([name, state, tone]) => (
-          <div key={name} className="flex w-full flex-row items-center justify-between gap-[10px] border-b border-[var(--hairline)] py-[6px] last:border-0">
-            <span className="text-[12px] text-[var(--ink)]">{name}</span>
-            <span className="flex flex-row items-center gap-[7px] text-[11px] text-[var(--muted)]">
-              <span className={`h-[6px] w-[6px] rounded-full ${tone === "success" ? "bg-[var(--accent)]" : tone === "warn" ? "bg-[var(--accent-2)]" : "bg-[var(--ink)]"}`} />
-              {state}
-            </span>
-          </div>
-        ))}
-        <div className="grid w-full grid-cols-2 gap-x-[20px] sm:grid-cols-4">
-          <KeyValue label="DNS" value="resolved" />
-          <KeyValue label="TLS" value="valid" />
-          <KeyValue label="PING" value="42 ms" />
-          <KeyValue label="SSH :22" value="timed out" />
-        </div>
-      </Panel>
-      <div className="flex w-full flex-row flex-wrap items-center justify-between gap-[10px]">
-        <span className="font-code text-[10.5px] text-[var(--muted)]">8s · next retry</span>
-        <div className="flex flex-row flex-wrap gap-[8px]">
-          <Action variant="primary" onClick={onRetry}>
-            Retry now
+      <div className="flex w-full flex-row flex-wrap items-center justify-end gap-[8px]">
+        {onOpenActivity && (
+          <Action variant="primary" onClick={onOpenActivity}>
+            Open Activity
           </Action>
-          <Action>Switch to web-02 instead</Action>
-        </div>
+        )}
+        {onRetry && (
+          <Action variant={onOpenActivity ? "ghost" : "primary"} onClick={onRetry}>
+            Send again
+          </Action>
+        )}
       </div>
-      <div className="flex w-full flex-row flex-wrap items-center gap-[10px] rounded-[10px] bg-[var(--canvas)] px-[12px] py-[9px] [outline:1px_solid_var(--hairline)]">
-        <span className="font-code text-[10px] tracking-[0.6px] text-[var(--muted)]">2 ACTIONS PAUSED</span>
-        <span className="text-[11px] text-[var(--ink)]">· rotate logs · /var/log/app</span>
-        <span className="text-[11px] text-[var(--ink)]">· restart worker · billing</span>
-      </div>
-      <SceneFooter>Your conversation is preserved · no changes made</SceneFooter>
+      <SceneFooter>The conversation up to the drop is saved on the console</SceneFooter>
     </div>
   );
 }

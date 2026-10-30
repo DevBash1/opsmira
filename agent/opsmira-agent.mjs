@@ -6,7 +6,13 @@
 //   node opsmira-agent.mjs --server wss://opsmira.example.com/api/agent/connect --token ops_connect_...
 //
 // First run: pairs with the one-time token and saves a credential next to the state file (mode 0600).
+// Without a token (or with one that was used already) it asks to join instead: the console owner sees a request
+// and accepts it (it pairs) or declines it (it removes itself). It waits for the answer as long as it takes.
 // Later runs: reconnect with the credential, forever, with backoff.
+//
+// It keeps itself current: when the console ships a different agent, this one downloads it from the console,
+// checks its sha256, test-runs it, and restarts into it. If the new one cannot connect three times running it
+// goes back to the installed file. --no-auto-update turns that off.
 //
 // On a hosting platform (no systemd, no root, a disk that resets on every deploy) run your app *under* the
 // agent, with a credential made in the console (Connect a server > Hosted app), so each deploy reconnects as
@@ -20,13 +26,26 @@
 // --access read-only  (default) only the read-only programs the console's surfaces use
 // --access operate    also lets the console run shell commands (the console asks its owner before any
 //                     change; this is the setting that makes the agent able to act). "full" means the same.
-import { spawn } from "node:child_process";
-import { chmodSync, existsSync, openSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import os from "node:os";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
+/** What this file is: the console compares it with the agent it ships to know when to send an update. */
+const SELF = fileURLToPath(import.meta.url);
+const sha256 = (data) => createHash("sha256").update(data).digest("hex");
+const SELF_SHA = (() => {
+  try {
+    return sha256(readFileSync(SELF));
+  } catch {
+    return undefined;
+  }
+})();
+/** Exit code that means "declined: uninstall me" to the systemd unit the installer writes. */
+export const DECLINED_EXIT = 78;
 
 /* ---------------- policy: what read-only allows ---------------- */
 
@@ -186,10 +205,25 @@ function connect(opts, state, onClose) {
     const hello = {
       type: "hello",
       name: opts.name,
-      info: { hostname: os.hostname(), platform: `${os.platform()} ${os.release()}`, node: process.version, agent: VERSION, os: process.platform, access: opts.access, ...(opts.appLog ? { appLog: opts.appLog } : {}) },
+      info: {
+        hostname: os.hostname(),
+        platform: `${os.platform()} ${os.release()}`,
+        node: process.version,
+        agent: VERSION,
+        os: process.platform,
+        access: opts.access,
+        caps: ["pending", "update", ...(canDetach(opts) ? ["detach"] : [])],
+        sha256: SELF_SHA,
+        autoUpdate: canUpdate(opts),
+        ...(state.update?.failed ? { updateFailed: state.update.sha256 } : {}),
+        ...(opts.appLog ? { appLog: opts.appLog } : {}),
+      },
     };
     if (state.credential) hello.credential = state.credential;
-    else hello.token = opts.token;
+    else {
+      if (opts.token) hello.token = opts.token;
+      if (state.request) hello.request = state.request;
+    }
     ws.send(JSON.stringify(hello));
   });
 
@@ -200,10 +234,47 @@ function connect(opts, state, onClose) {
     } catch {
       return;
     }
+    if (msg.type === "pending") {
+      if (msg.secret) {
+        state.request = msg.secret;
+        writeState(opts.state, state);
+      }
+      log(`waiting for the console owner to accept this server as "${msg.name}" (it shows under Connect a server)`);
+      return;
+    }
+    if (msg.type === "accepted") {
+      log("accepted by the console owner; connecting");
+      opts.reconnectNow = true;
+      return;
+    }
+    if (msg.type === "declined") {
+      log("the console owner declined this server; removing the agent");
+      opts.stop = true;
+      forget(opts, state);
+      process.exitCode = DECLINED_EXIT;
+      setTimeout(() => process.exit(DECLINED_EXIT), 200).unref();
+      return;
+    }
+    if (msg.type === "update") {
+      selfUpdate(opts, state, msg).catch((err) => log(`update failed: ${err.message}`));
+      return;
+    }
+    if (msg.type === "detach-ack") {
+      detachAcked(opts, msg.id);
+      return;
+    }
     if (msg.type === "ready") {
       ready = true;
+      opts.ready = true;
+      // Running an update that connected: from now on it is the version to start.
+      if (state.update?.sha256 === SELF_SHA && !state.update.ok) {
+        state.update.ok = true;
+        state.update.tries = 0;
+        writeState(opts.state, state);
+      }
       if (msg.credential) {
         state.credential = msg.credential;
+        delete state.request;
         state.id = msg.id;
         state.name = msg.name;
         writeState(opts.state, state);
@@ -239,6 +310,10 @@ function connect(opts, state, onClose) {
           res = await runShell(msg.command, { timeout: msg.timeout, onChild: (child) => running.set(msg.id, child) });
           running.delete(msg.id);
         }
+      } else if (msg.op === "detach") {
+        res = canDetach(opts) ? startDetachedRun(opts, msg) : { ok: false, code: null, stdout: "", stderr: `blocked by the agent: detached runs need --access operate${IS_WINDOWS ? " on Linux or macOS" : ""}` };
+      } else if (msg.op === "detach-tell") {
+        res = tellDetachedRun(opts, msg);
       } else if (msg.op === "run") {
         const why = denied(opts.access, msg.file, msg.args);
         res = why ? { ok: false, code: null, stdout: "", stderr: `blocked by the agent (${opts.access}): ${why}` } : await runProgram(msg.file, msg.args, { timeout: msg.timeout, input: msg.input });
@@ -250,9 +325,281 @@ function connect(opts, state, onClose) {
   });
 
   opts.socket = ws;
-  ws.addEventListener("close", () => onClose(ready));
+  ws.addEventListener("close", () => {
+    opts.ready = false;
+    onClose(ready);
+  });
   ws.addEventListener("error", () => {});
   return ws;
+}
+
+/* ---------------- declined: leave no trace ---------------- */
+
+/** Forget the console: the state file (and any downloaded update) goes. The installer's unit removes the rest. */
+function forget(opts, state) {
+  for (const file of [opts.state, state.update?.file]) {
+    try {
+      if (file) unlinkSync(file);
+    } catch {
+      // already gone
+    }
+  }
+  // The Windows installer runs the agent as SYSTEM from a scheduled task: remove the task and the folder.
+  if (IS_WINDOWS && process.env.OPSMIRA_SUPERVISED === "windows-task") {
+    const dir = dirname(SELF).replace(/'/g, "''");
+    const script = `Start-Sleep 3; Unregister-ScheduledTask -TaskName opsmira-agent -Confirm:$false -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force '${dir}' -ErrorAction SilentlyContinue`;
+    spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+  }
+}
+
+/* ---------------- detached runs (docs/detach.md) ---------------- */
+
+/** A job the console hands over to run here on its own: operate access, a state directory, a POSIX shell. */
+const canDetach = (opts) => opts.access === "operate" && !IS_WINDOWS && !!opts.state && !opts.exec;
+/** Where runs live: next to the state file (or ~/.opsmira-agent for the default state file in the home directory). */
+const detachedBase = (opts) => (dirname(opts.state) === os.homedir() ? join(os.homedir(), ".opsmira-agent") : dirname(opts.state));
+const runsDir = (opts) => join(detachedBase(opts), "detached");
+const RUN_ID = /^[0-9a-f-]{36}$/;
+const KEEP_FINISHED_MS = 24 * 60 * 60 * 1000;
+
+/** Run ids whose report the console has not acknowledged yet. */
+function openRuns(opts) {
+  try {
+    return readdirSync(runsDir(opts)).filter((id) => RUN_ID.test(id) && !existsSync(join(runsDir(opts), id, ".acked")));
+  } catch {
+    return [];
+  }
+}
+
+/** The owner's `opsmira` command: a wrapper around a readable copy of the runner (run dirs are private). */
+function installCli(opts, text) {
+  const base = detachedBase(opts);
+  const copy = join(base, "opsmira-detached.mjs");
+  writeFileSync(copy, text, { mode: 0o644 });
+  const q = (v) => `'${String(v).replace(/'/g, "'\\''")}'`;
+  const wrapper = `#!/bin/sh\n# opsmira: follow and talk to a detached Opsmira run on this server. Removed when the console has its report.\nOPSMIRA_AGENT_STATE_DIR=${q(base)} exec ${q(process.execPath)} ${q(copy)} "$@"\n`;
+  const tryWrite = (file) => {
+    try {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, wrapper, { mode: 0o755 });
+      chmodSync(file, 0o755);
+      return file;
+    } catch {
+      return null;
+    }
+  };
+  if (process.env.OPSMIRA_CLI_PATH) return tryWrite(process.env.OPSMIRA_CLI_PATH); // tests, or an owner's choice
+  let where = tryWrite("/usr/local/bin/opsmira");
+  if (!where) {
+    // An account allowed passwordless sudo can still put it on everyone's PATH.
+    const tmp = join(base, "opsmira.cli");
+    writeFileSync(tmp, wrapper, { mode: 0o755 });
+    const r = spawnSyncSafe("sudo", ["-n", "install", "-m", "0755", tmp, "/usr/local/bin/opsmira"]);
+    if (r === 0) where = "/usr/local/bin/opsmira";
+  }
+  return where || tryWrite(join(os.homedir(), ".local", "bin", "opsmira"));
+}
+
+function spawnSyncSafe(cmd, args) {
+  try {
+    return spawnSync(cmd, args, { stdio: "ignore", timeout: 10000 }).status;
+  } catch {
+    return null;
+  }
+}
+
+/** Write the run directory (spec, key, the verified runner) and start the runner in its own session. */
+function startDetachedRun(opts, msg) {
+  const { spec, key, runner } = msg;
+  const fail = (why) => ({ ok: false, code: null, stdout: "", stderr: why });
+  if (!spec || !RUN_ID.test(String(spec.id)) || typeof key !== "string" || typeof runner?.text !== "string") return fail("incomplete detach request");
+  if (sha256(runner.text) !== runner.sha256) return fail("the runner does not match its sha256");
+  const dir = join(runsDir(opts), spec.id);
+  if (existsSync(dir)) return fail("that run exists already");
+  try {
+    mkdirSync(join(dir, "inbox"), { recursive: true, mode: 0o700 });
+    chmodSync(runsDir(opts), 0o700);
+    chmodSync(dir, 0o700);
+    writeFileSync(join(dir, "spec.json"), JSON.stringify(spec, null, 2), { mode: 0o600 });
+    writeFileSync(join(dir, "key"), key, { mode: 0o600 });
+    writeFileSync(join(dir, "runner.mjs"), runner.text, { mode: 0o700 });
+    const cli = installCli(opts, runner.text);
+    if (cli) writeFileSync(join(dir, "cli"), cli, { mode: 0o600 });
+    const out = openSync(join(dir, "runner.out"), "a", 0o600);
+    // Its own session: it outlives this connection, and (with KillMode=process) a restart of the agent.
+    const child = spawn(process.execPath, [join(dir, "runner.mjs"), "run", dir], { detached: true, stdio: ["ignore", out, out], cwd: os.homedir() });
+    child.unref();
+    log(`detached run ${spec.id} started (pid ${child.pid})${cli ? `; follow it with: ${cli} watch` : ""}`);
+    return { ok: true, code: 0, stdout: "", stderr: "", output: cli ? `Follow it on the server with: ${cli === "/usr/local/bin/opsmira" ? "opsmira" : cli} watch` : `Its log is ${join(dir, "log.jsonl")}` };
+  } catch (err) {
+    return fail(`could not start: ${err.message}`);
+  }
+}
+
+/** A message from the owner (read by the runner before its next step), or a stop request. */
+function tellDetachedRun(opts, msg) {
+  const fail = (why) => ({ ok: false, code: null, stdout: "", stderr: why });
+  if (!RUN_ID.test(String(msg.run))) return fail("no such run");
+  const dir = join(runsDir(opts), msg.run);
+  if (!existsSync(dir)) return fail("no such run");
+  if (existsSync(join(dir, "report.json"))) return fail("that run has ended");
+  if (msg.stop) writeFileSync(join(dir, "stop"), new Date().toISOString(), { mode: 0o600 });
+  else writeFileSync(join(dir, "inbox", `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`), JSON.stringify({ text: String(msg.text ?? "").slice(0, 4000), at: new Date().toISOString() }), { mode: 0o600 });
+  return { ok: true, code: 0, stdout: "", stderr: "", output: "" };
+}
+
+/** Send what the runners wrote since last time, and each report until the console acknowledges it. */
+function relayDetached(opts) {
+  const tick = () => {
+    const ws = opts.socket;
+    if (!opts.ready || !ws || ws.readyState !== 1 || !opts.state) return;
+    let ids;
+    try {
+      ids = readdirSync(runsDir(opts)).filter((id) => RUN_ID.test(id));
+    } catch {
+      return;
+    }
+    for (const id of ids) {
+      const dir = join(runsDir(opts), id);
+      try {
+        if (existsSync(join(dir, ".acked"))) {
+          if (Date.now() - statSync(join(dir, ".acked")).mtimeMs > KEEP_FINISHED_MS) rmSync(dir, { recursive: true, force: true });
+          continue;
+        }
+        const logFile = join(dir, "log.jsonl");
+        const size = existsSync(logFile) ? statSync(logFile).size : 0;
+        let offset = existsSync(join(dir, ".relayed")) ? Number(readFileSync(join(dir, ".relayed"), "utf8")) || 0 : 0;
+        if (size > offset) {
+          const chunk = readFileSync(logFile).subarray(offset);
+          const end = chunk.lastIndexOf(10) + 1; // whole lines only
+          const entries = String(chunk.subarray(0, end))
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => {
+              try {
+                return JSON.parse(line);
+              } catch {
+                return null;
+              }
+            })
+            .filter(Boolean);
+          for (let i = 0; i < entries.length; i += 200) ws.send(JSON.stringify({ type: "detach-log", id, entries: entries.slice(i, i + 200) }));
+          offset += end;
+          writeFileSync(join(dir, ".relayed"), String(offset));
+        }
+        const report = join(dir, "report.json");
+        const sent = join(dir, ".reported");
+        if (existsSync(report) && offset >= size && (!existsSync(sent) || Date.now() - statSync(sent).mtimeMs > 30000)) {
+          ws.send(JSON.stringify({ type: "detach-report", id, report: JSON.parse(readFileSync(report, "utf8")) }));
+          writeFileSync(sent, new Date().toISOString());
+        }
+      } catch (err) {
+        log(`detached run ${id}: ${err.message}`);
+      }
+    }
+  };
+  setInterval(tick, 1000).unref();
+}
+
+/** The console has the report: the run is done here. Its directory stays a day (for the owner); the command goes. */
+function detachAcked(opts, id) {
+  if (!RUN_ID.test(String(id))) return;
+  const dir = join(runsDir(opts), id);
+  if (!existsSync(dir)) return;
+  writeFileSync(join(dir, ".acked"), new Date().toISOString());
+  log(`detached run ${id}: report delivered`);
+  if (openRuns(opts).length) return;
+  for (const file of [readFileSafe(join(dir, "cli")), join(detachedBase(opts), "opsmira-detached.mjs"), join(detachedBase(opts), "opsmira.cli")]) {
+    if (!file) continue;
+    try {
+      // only our own wrapper: never a file someone else put at that path
+      if (file.endsWith("/opsmira") && !readFileSync(file, "utf8").includes(detachedBase(opts))) continue;
+      unlinkSync(file);
+    } catch {
+      if (file === "/usr/local/bin/opsmira") spawnSyncSafe("sudo", ["-n", "rm", "-f", file]);
+    }
+  }
+}
+
+function readFileSafe(file) {
+  try {
+    return readFileSync(file, "utf8").trim();
+  } catch {
+    return null;
+  }
+}
+
+/* ---------------- updating itself ---------------- */
+
+/** An agent updates itself only when it keeps state on disk and is not supervising a hosted app (redeploy those). */
+const canUpdate = (opts) => !opts.noUpdate && !!opts.state && !opts.exec;
+const updateFile = (opts) => join(dirname(opts.state), "opsmira-agent.update.mjs");
+
+/** The console ships a different agent: fetch it from the console, check it, test-run it, then restart into it. */
+async function selfUpdate(opts, state, msg) {
+  if (!canUpdate(opts) || typeof msg.sha256 !== "string" || msg.sha256 === SELF_SHA) return;
+  // A restart could cut a detached run short (installs without KillMode=process), and its report must get out first.
+  if (openRuns(opts).length) {
+    log("an update is waiting until the detached run has reported back");
+    return;
+  }
+  if (state.update?.sha256 === msg.sha256 && state.update.failed) return;
+  const origin = opts.server.replace(/^wss:/i, "https:").replace(/^ws:/i, "http:").replace(/\/api\/agent\/connect\/?$/, "");
+  const res = await fetch(`${origin}/agent/opsmira-agent.mjs`, { signal: AbortSignal.timeout(30000) });
+  if (!res.ok) throw new Error(`download: HTTP ${res.status}`);
+  const code = Buffer.from(await res.arrayBuffer());
+  if (sha256(code) !== msg.sha256) throw new Error("the download does not match the sha256 the console sent; keeping this version");
+  const target = updateFile(opts);
+  const next = target.replace(/\.update\.mjs$/, ".next.mjs"); // .mjs, or Node would not load it as a module
+  writeFileSync(next, code, { mode: 0o600 });
+  // It must at least load and know its version before it is allowed to replace this one.
+  const ok = await new Promise((resolve) => {
+    const child = spawn(process.execPath, [next, "--version"], { timeout: 15000 });
+    let out = "";
+    child.stdout.on("data", (c) => (out += c));
+    child.on("error", () => resolve(false));
+    child.on("close", (c) => resolve(c === 0 && /\d+\.\d+/.test(out)));
+  });
+  if (!ok) {
+    unlinkSync(next);
+    throw new Error("the new agent did not start; keeping this version");
+  }
+  renameSync(next, target);
+  state.update = { file: target, sha256: msg.sha256, version: msg.version ?? null, tries: 0, at: new Date().toISOString() };
+  writeState(opts.state, state);
+  log(`updated to ${msg.version ?? "a new version"}; restarting into it`);
+  opts.stop = true;
+  try {
+    opts.socket?.close();
+  } catch {
+    // restarting anyway
+  }
+  // Under the installer's service (OPSMIRA_SUPERVISED) the service restarts it; otherwise start the next one before leaving.
+  if (!process.env.OPSMIRA_SUPERVISED) spawn(process.execPath, process.argv.slice(1), { stdio: "inherit", detached: true }).unref();
+  setTimeout(() => process.exit(0), 300).unref();
+}
+
+/** At start: run the downloaded update instead of this file, unless it has failed to connect three times. */
+async function startUpdate(opts, state) {
+  const u = state.update;
+  if (process.env.OPSMIRA_AGENT_UPDATED || !canUpdate(opts) || !u?.file || u.failed || u.sha256 === SELF_SHA) return false;
+  try {
+    if (sha256(readFileSync(u.file)) !== u.sha256) return false;
+  } catch {
+    return false; // removed (a reinstall clears it): run the installed file
+  }
+  if (!u.ok && (u.tries ?? 0) >= 3) {
+    u.failed = true;
+    writeState(opts.state, state);
+    log(`update ${u.version ?? ""} never connected; running the installed version`);
+    return false;
+  }
+  if (!u.ok) u.tries = (u.tries ?? 0) + 1;
+  writeState(opts.state, state);
+  process.env.OPSMIRA_AGENT_UPDATED = "1";
+  const mod = await import(pathToFileURL(u.file).href);
+  await mod.main();
+  return true;
 }
 
 /* ---------------- running an app under the agent ---------------- */
@@ -321,10 +668,14 @@ function startApp(opts) {
   child.on("exit", (code, signal) => setTimeout(() => leave(code, signal), 500).unref());
 }
 
-async function main() {
+export async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.version) {
+    console.log(`opsmira-agent ${VERSION}`);
+    return;
+  }
   if (args.help || args.h) {
-    console.log("opsmira-agent --server wss://HOST/api/agent/connect --token ops_connect_... [--name web-1] [--access read-only|operate] [--state FILE]");
+    console.log("opsmira-agent --server wss://HOST/api/agent/connect [--token ops_connect_...] [--name web-1] [--access read-only|operate] [--state FILE] [--no-auto-update]");
     console.log("opsmira-agent --server wss://HOST/api/agent/connect --credential ops_agent_... --exec \"npm start\"   (run an app under the agent)");
     return;
   }
@@ -337,6 +688,7 @@ async function main() {
     name: typeof args.name === "string" ? args.name : os.hostname().toLowerCase().replace(/[^a-z0-9._-]/g, "-").slice(0, 40),
     access: args.access === "operate" || args.access === "full" ? "operate" : "read-only",
     state: typeof args.state === "string" ? args.state : join(process.env.HOME || os.homedir(), ".opsmira-agent.json"),
+    noUpdate: !!args["no-auto-update"] || /^(1|true|yes)$/i.test(process.env.OPSMIRA_NO_AUTO_UPDATE ?? ""),
     stop: false,
   };
   // With --exec the app comes first: a problem with the agent is reported and the app starts without it.
@@ -357,8 +709,10 @@ async function main() {
   } else {
     opts.appLog = undefined;
   }
+  if (typeof args.supervised === "string") process.env.OPSMIRA_SUPERVISED = args.supervised;
   const state = opts.credential ? { credential: opts.credential } : existsSync(opts.state) ? readState(opts.state) : {};
-  if (!state.credential && !opts.token) return refuse("Missing --token: copy the connect command from the console (Surfaces, Connect a server).");
+  if (await startUpdate(opts, state)) return;
+  if (!state.credential && !opts.token && !state.request) log("no token: this server will ask to join, and the console owner accepts or declines it (Connect a server).");
   if (typeof WebSocket === "undefined") return refuse("This needs Node 22 or newer (built-in WebSocket).");
   if (/^ws:\/\//i.test(opts.server) && !/^ws:\/\/(localhost|127\.|\[::1\])/i.test(opts.server)) {
     log("warning: this connection is not encrypted (ws://). Put the console behind HTTPS and use wss:// so the credential is not sent in the clear.");
@@ -367,12 +721,15 @@ async function main() {
 
   if (opts.exec) startApp(opts);
 
+  if (canDetach(opts)) relayDetached(opts);
+
   let delay = 1000;
   const loop = () => {
     if (opts.stop) return;
     connect(opts, state, (wasReady) => {
       if (opts.stop) return;
-      delay = wasReady ? 1000 : Math.min(delay * 2, 30000);
+      delay = opts.reconnectNow ? 0 : wasReady ? 1000 : Math.min(delay * 2, 30000);
+      opts.reconnectNow = false;
       log(`disconnected; retrying in ${Math.round(delay / 1000)}s`);
       setTimeout(loop, delay);
     });

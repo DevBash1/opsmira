@@ -61,10 +61,12 @@ test("pairs with a one-time token, then answers read-only requests and refuses t
   const missing = await agents.callAgent(agent.id, "run", { file: "ufw", args: ["status"], timeout: 5000 });
   assert.equal(missing.ok, false); // allowed by policy, but ufw is not installed or not permitted here
 
-  // The same token cannot pair a second agent.
+  // The same token cannot pair a second agent: that one has to ask to join instead.
   const again = startAgent(["--token", token, "--name", "second"]);
-  await until(() => /refused: invalid or expired token/.test(again.output()));
+  await until(() => /waiting for the console owner/.test(again.output()));
   assert.equal(agents.listAgents().length, 1);
+  assert.equal(agents.listRequests().find((r) => r.name === "second")?.oldToken, true);
+  again.child.kill();
 
   // Reconnect with the saved credential, no token.
   a.child.kill();

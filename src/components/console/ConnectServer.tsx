@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../Icons";
-import { api, type AgentInfo } from "../../lib/console-api";
+import { api, type AgentInfo, type JoinRequest } from "../../lib/console-api";
 
 /**
- * Servers that connect themselves: a one-time command to run on the server, and the list of servers that
- * have connected. Shown in the Surfaces menu next to the SSH server field.
+ * Servers that connect themselves: a one-time command to run on the server, the servers asking to join (they
+ * connected without a usable token), and the list of servers that have connected. Shown in the Surfaces menu
+ * next to the SSH server field.
  */
 type Target = "linux" | "windows" | "hosted";
 
@@ -62,7 +63,9 @@ function Choice<T extends string>({ value, options, onChange }: { value: T; opti
 
 export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [made, setMade] = useState<{ command: string; manual: string; expiresAt: number } | null>(null);
+  const [requests, setRequests] = useState<JoinRequest[]>([]);
+  const [answering, setAnswering] = useState<string | null>(null);
+  const [made, setMade] = useState<{ command: string; manual: string } | null>(null);
   const [once, setOnce] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -83,6 +86,7 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
       .agents()
       .then((r) => {
         setAgents(r.agents);
+        setRequests(r.requests ?? []);
         // A server that shows up while its command is on screen has just connected.
         const fresh = baseline.current && r.agents.find((a) => a.online && !baseline.current!.has(a.id));
         if (fresh) setJoined(fresh.name);
@@ -135,6 +139,20 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
     baseline.current = null;
   };
 
+  // Declining removes the agent from that server, so it asks twice, like Remove.
+  const answerJoin = async (id: string, answer: "accept" | "decline") => {
+    if (answer === "decline" && confirm !== `decline:${id}`) {
+      setConfirm(`decline:${id}`);
+      window.setTimeout(() => setConfirm((c) => (c === `decline:${id}` ? null : c)), 4000);
+      return;
+    }
+    setConfirm(null);
+    setAnswering(id);
+    await api.answerJoin(id, answer).catch(() => setError("Couldn't answer that request. Try again."));
+    setAnswering(null);
+    load();
+  };
+
   const remove = async (id: string) => {
     if (confirm !== id) {
       setConfirm(id);
@@ -148,6 +166,51 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
 
   return (
     <div className="flex flex-col gap-[8px] px-[8px] pb-[6px]">
+      {requests.length > 0 && (
+        <div className="flex flex-col gap-[4px] rounded-[12px] bg-[color-mix(in_oklab,var(--accent)_7%,var(--canvas))] p-[8px] [outline:1px_solid_color-mix(in_oklab,var(--accent)_30%,var(--line))]">
+          <span className="text-[10.5px] text-[var(--muted)]">Asking to join · accept to connect it, decline and it uninstalls itself</span>
+          {requests.map((r) => (
+            <div key={r.id} className="flex flex-row flex-wrap items-center gap-x-[9px] gap-y-[4px] rounded-[9px] px-[6px] py-[4px]">
+              <span
+                title={r.online ? "Connected and waiting" : "Not connected now; it gets the answer when it comes back"}
+                className={`h-[6px] w-[6px] shrink-0 rounded-full ${r.online ? "bg-[var(--accent)] motion-safe:animate-pulse" : "bg-[var(--line)]"}`}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="font-code block truncate text-[11.5px] text-[var(--ink)]">{r.name}</span>
+                <span className="block truncate text-[10.5px] text-[var(--muted)]" title={r.platform ?? undefined}>
+                  {[
+                    r.hostname && r.hostname !== r.name ? r.hostname : null,
+                    r.ip,
+                    r.access === "operate" ? "wants to run commands" : "read-only",
+                    r.oldToken ? "came with a used token" : "no token",
+                    `asked ${new Date(r.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </span>
+              <span className="flex shrink-0 flex-row items-center gap-[6px]">
+                <button
+                  type="button"
+                  disabled={answering === r.id}
+                  onClick={() => answerJoin(r.id, "accept")}
+                  className="cursor-pointer rounded-[8px] bg-[var(--accent)] px-[9px] py-[3px] text-[11px] font-medium text-[var(--surface)] transition-transform duration-150 active:scale-[0.96] disabled:opacity-60"
+                >
+                  Accept
+                </button>
+                <button
+                  type="button"
+                  disabled={answering === r.id}
+                  onClick={() => answerJoin(r.id, "decline")}
+                  className={`cursor-pointer rounded-[8px] px-[9px] py-[3px] text-[11px] transition-colors duration-150 disabled:opacity-60 ${confirm === `decline:${r.id}` ? "bg-[color-mix(in_oklab,var(--danger)_14%,transparent)] text-[var(--danger)]" : "bg-[var(--soft)] text-[var(--ink)]"}`}
+                >
+                  {confirm === `decline:${r.id}` ? "Decline and uninstall?" : "Decline"}
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {agents.length > 0 && (
         <div className="flex flex-col gap-[2px]">
           <span className="text-[10.5px] text-[var(--muted)]">Connected servers</span>
@@ -168,6 +231,7 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
                   {a.hostname && a.hostname !== a.name ? ` · ${a.hostname}` : ""}
                   {a.access === "operate" || a.access === "full" ? " · can run commands" : " · read-only"}
                   {a.online ? "" : " · offline"}
+                  {a.online && a.current === false ? " · updating" : ""}
                 </span>
               </button>
               <button
@@ -251,7 +315,7 @@ export function ConnectServer({ onPick }: { onPick: (host: string) => void }) {
           ) : (
             <>
               <span className="text-[10.5px] text-[var(--muted)]">
-                {once ? "Run on the machine (Node 22+)." : target === "windows" ? "Run in an administrator PowerShell." : "Run on the server as root."} Works once, expires in an hour.
+                {once ? "Run on the machine (Node 22+)." : target === "windows" ? "Run in an administrator PowerShell." : "Run on the server as root."} Works once and does not expire. Run again, it asks to join here instead.
               </span>
               <CodeLine text={once ? made.manual : made.command} copied={copied && copiedKey === "main"} onCopy={copy} />
               <div className="flex flex-row items-center gap-[12px] text-[10.5px] text-[var(--muted)]">

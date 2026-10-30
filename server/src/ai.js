@@ -12,6 +12,8 @@ import { QUIET_TOOLS } from "./history.js";
 import { addMemory, deleteArtifact, listArtifacts, readArtifact, readMemory, removeMemory, saveArtifact } from "./store.js";
 import { cleanSuggestions, noDashes, safeParse } from "./text.js";
 import { createTask, describeTask, getTask, listTasks, removeTask, updateTask } from "./tasks.js";
+import { selfUpdateNote } from "./update.js";
+import { MAX_MINUTES as DETACH_MAX_MINUTES, MAX_STEPS as DETACH_MAX_STEPS, detachProblem } from "./detach.js";
 import { completeStreaming } from "./stream.js";
 
 const client = new OpenAI({ apiKey: env.openrouterApiKey, baseURL: env.openrouterBaseUrl });
@@ -326,6 +328,27 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "detach",
+      description:
+        "Hand a job to a connected server (agent:<name>, operate access) to do on its own, for a change that takes this console down while it runs: upgrading or restarting the web server or proxy the console is reached through, restarting the machine or cluster the console runs on, updating Opsmira itself. Run from here, such a change cuts this turn off halfway and kills its own command. The server runs it with the model and its own commands, writes everything to a log the owner can follow there with `opsmira watch`, puts every command in Activity, and reports back into this conversation. Always needs the owner's approval (even in Full access). Do not use it for anything that works fine with propose_action.",
+      parameters: {
+        type: "object",
+        properties: {
+          server: { type: "string", description: SERVER_PARAM },
+          title: { type: "string", description: "Short name for the job, e.g. Upgrade Caddy to 2.11.5." },
+          goal: { type: "string", description: "What must be true at the end, specific (versions, services, URLs that must answer)." },
+          plan: { type: "string", description: "The steps, in order, including the checks before and after, the backups, and how to roll back." },
+          why: { type: "string", description: "Why it cannot run from the console (what goes down while it runs)." },
+          minutes: { type: "number", description: "Time limit, 5 to 120 (default 30)." },
+          max_steps: { type: "number", description: "Model steps allowed, 5 to 100 (default 40)." },
+        },
+        required: ["server", "title", "goal", "plan", "why"],
+      },
+    },
+  },
   VIEW_TOOL,
   SURFACE_TOOL,
   {
@@ -561,7 +584,7 @@ export async function runTurn(
     : "\n\nYou have no saved artifacts yet.";
   const taskCount = listTasks().length;
   const taskNote = taskCount ? `\n\nThere ${taskCount === 1 ? "is 1 task" : `are ${taskCount} tasks`} set up (manage_tasks list shows them).` : "";
-  const systemPrompt = SYSTEM_PROMPT + (fullAccess ? FULL_ACCESS_NOTE : "") + serversNote(dflt) + memoryNote + artifactNote + taskNote;
+  const systemPrompt = SYSTEM_PROMPT + (fullAccess ? FULL_ACCESS_NOTE : "") + serversNote(dflt) + memoryNote + artifactNote + taskNote + selfUpdateNote();
   const messages = [{ role: "system", content: systemPrompt }, ...toModelMessages(conversation, vision)];
   let tokenCap = maxTokens();
   let creditRetry = false;
@@ -846,6 +869,36 @@ export async function runTurn(
         } else {
           if (!saved.existing) onEvent({ type: "memory", action: "saved", text: saved.entry.text });
           result = { status: "saved", id: saved.entry.id, text: saved.entry.text, ...(saved.existing ? { note: "already saved" } : {}) };
+        }
+      } else if (call.function?.name === "detach") {
+        const target = targetServer(parsed.server, dflt);
+        const text = (v, n) => (typeof v === "string" ? noDashes(v.trim()).slice(0, n) : "");
+        const [title, goal, plan, why] = [text(parsed.title, 120), text(parsed.goal, 2000), text(parsed.plan, 6000), text(parsed.why, 1000)];
+        const problem = target.error || (!goal || !plan || !why || !title ? "title, goal, plan and why are required" : detachProblem(target.server));
+        if (problem) {
+          result = { error: problem };
+        } else {
+          const minutes = Math.min(Math.max(Math.round(Number(parsed.minutes) || 30), 5), DETACH_MAX_MINUTES);
+          const maxSteps = Math.min(Math.max(Math.round(Number(parsed.max_steps) || 40), 5), DETACH_MAX_STEPS);
+          const id = randomUUID();
+          // Never auto-approved: it sends the model key to that server and runs there unwatched.
+          const proposal = {
+            id,
+            kind: "detach",
+            command: `Goal: ${goal}\n\nPlan:\n${plan}`,
+            server: target.server,
+            title: `Run on its own: ${title}`,
+            context: `${why} It runs on ${target.server.replace(/^agent:/, "")} with the model, for up to ${minutes} minutes and ${maxSteps} steps, and reports back here. Follow it there with: opsmira watch`,
+            riskLevel: "High",
+            riskDetail: "Your model key goes to that server for the run, and its commands are not approved one by one. Every command lands in Activity.",
+            detach: { goal, plan, why, minutes, maxSteps, model: model || undefined },
+            status: "pending",
+            createdAt: new Date().toISOString(),
+          };
+          pendingApprovals.set(id, proposal);
+          result = { status: "awaiting_approval", id };
+          onEvent({ type: "proposal", proposal });
+          proposed = true;
         }
       } else if (call.function?.name === "manage_tasks") {
         result =

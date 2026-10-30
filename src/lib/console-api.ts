@@ -65,6 +65,9 @@ export interface Proposal {
   /** A connected server the command runs on (agent:name); absent for the server Opsmira is on. */
   server?: string;
   confirmPhrase?: string;
+  /** "detach": a job handed to the server to run on its own (docs/detach.md), not a command. */
+  kind?: "detach";
+  detach?: { goal: string; plan: string; why: string; minutes: number; maxSteps: number };
   status: "pending" | "approved" | "declined";
   result?: { exitCode: number | null; output: string; durationMs: number };
 }
@@ -222,6 +225,35 @@ export type AgentInfo = {
   access: "read-only" | "operate" | "full" | null;
   hostname: string | null;
   platform: string | null;
+  /** The agent version it runs, and whether that is the one this console ships (null: it does not say). */
+  version?: string | null;
+  current?: boolean | null;
+  createdAt: string;
+  lastSeen: string | null;
+};
+
+/** This console's build and whether a newer Opsmira is out (GET /api/update). */
+export type UpdateStatus = {
+  current: { version: string; commit: string | null; channel: "edge" | "release"; install: string };
+  available: boolean;
+  latest: { label: string | null; version?: string; commit?: string | null; behind?: number; url: string | null; notes: string[] } | null;
+  checkedAt: string | null;
+  error: string | null;
+  enabled: boolean;
+};
+
+/** A server that connected without a usable token and waits for the owner to accept or decline it. */
+export type JoinRequest = {
+  id: string;
+  name: string;
+  hostname: string | null;
+  platform: string | null;
+  os: "windows" | "unix" | null;
+  access: "read-only" | "operate";
+  ip: string | null;
+  /** It came with a token that was already used. */
+  oldToken: boolean;
+  online: boolean;
   createdAt: string;
   lastSeen: string | null;
 };
@@ -258,9 +290,11 @@ export const api = {
     );
   },
   hosts: () => fetch("/api/hosts").then((r) => json<{ hosts: string[] }>(r)),
-  agents: () => fetch("/api/agents").then((r) => json<{ agents: AgentInfo[]; defaultServer?: string }>(r)),
+  agents: () => fetch("/api/agents").then((r) => json<{ agents: AgentInfo[]; requests?: JoinRequest[]; defaultServer?: string }>(r)),
   agentToken: (options: { os: "linux" | "windows"; access: "read-only" | "operate" }) =>
-    post("/api/agents/token", options).then((r) => json<{ token: string; expiresAt: number; command: string; manual: string }>(r)),
+    post("/api/agents/token", options).then((r) => json<{ token: string; command: string; manual: string }>(r)),
+  update: () => fetch("/api/update").then((r) => json<UpdateStatus>(r)),
+  answerJoin: (id: string, answer: "accept" | "decline") => post(`/api/agents/requests/${encodeURIComponent(id)}/${answer}`, {}).then((r) => json<{ ok: true }>(r)),
   agentCredential: (options: { name: string; access: "read-only" | "operate" }) =>
     post("/api/agents/credential", options).then((r) => json<{ name: string; command: string }>(r)),
   tasks: () => fetch("/api/tasks").then((r) => json<{ tasks: TaskInfo[] }>(r)),

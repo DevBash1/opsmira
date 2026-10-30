@@ -5,7 +5,7 @@ import { ConsoleIdle } from "../components/ConsoleIdle";
 import { ConsoleApprovalCard } from "../components/ConsoleApprovalCard";
 import { Markdown } from "../components/Markdown";
 import { SceneView } from "../components/console/scenes";
-import { DestructiveScene, OfflineScene, PermissionScene } from "../components/console/scenes/StateScenes";
+import { DestructiveScene, DetachScene, OfflineScene, PermissionScene } from "../components/console/scenes/StateScenes";
 import { Aurora, type AuroraMood } from "../components/console/Aurora";
 import { ConnectServer } from "../components/console/ConnectServer";
 import { IconButton } from "../components/console/IconButton";
@@ -42,6 +42,7 @@ import {
   type Proposal,
   type ServerTurn,
   type TaskInfo,
+  type UpdateStatus,
 } from "../lib/console-api";
 
 type ToolCall = {
@@ -91,6 +92,8 @@ type Turn = {
   error?: string;
   errorCode?: string;
   offline?: boolean;
+  /** When the stream to the console dropped (ISO). */
+  offlineAt?: string;
   stopped?: boolean;
   scene?: SceneCall;
 };
@@ -595,6 +598,7 @@ function TurnBlock({
   onAsk,
   onOpenArtifact,
   onOpenTasks,
+  onOpenActivity,
 }: {
   turn: Turn;
   busyProposal: string | null;
@@ -605,6 +609,7 @@ function TurnBlock({
   onAsk?: (prompt: string) => void;
   onOpenArtifact?: (id: string) => void;
   onOpenTasks?: () => void;
+  onOpenActivity?: () => void;
 }) {
   // The thinking and one command's output share a single open slot: opening one closes the other.
   const [openPanel, setOpenPanel] = useState<string | null>(null);
@@ -705,7 +710,7 @@ function TurnBlock({
 
       {turn.offline ? (
         <div className="scene-stagger group/scene w-full">
-          <OfflineScene onRetry={onRetry} />
+          <OfflineScene at={turn.offlineAt} onRetry={onRetry} onOpenActivity={onOpenActivity} />
         </div>
       ) : turn.errorCode === "credits" ? (
         <div style={{ animationDelay: "120ms" }} className="w-full motion-safe:animate-soft-rise">
@@ -733,7 +738,15 @@ function TurnBlock({
         <div className="flex w-full shrink-0 flex-col items-start gap-[12px]">
           {turn.proposals.map((p) => (
             <div key={p.id} style={{ animationDelay: "160ms" }} className="w-full motion-safe:animate-soft-rise">
-              {p.confirmPhrase ? (
+              {p.kind === "detach" ? (
+                <DetachScene
+                  proposal={p}
+                  busy={busyProposal === p.id}
+                  locked={locked}
+                  onApprove={() => onDecide(p.id, true)}
+                  onDecline={() => onDecide(p.id, false)}
+                />
+              ) : p.confirmPhrase ? (
                 <DestructiveScene
                   proposal={p}
                   busy={busyProposal === p.id}
@@ -936,6 +949,15 @@ function ConsoleApp({
   const [showArtifacts, setShowArtifacts] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
   const [tasksWaiting, setTasksWaiting] = useState(0);
+  const [joinRequests, setJoinRequests] = useState(0);
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  // Whether a newer Opsmira is out: asked on load and every half hour (the server asks GitHub every few hours).
+  useEffect(() => {
+    const load = () => api.update().then(setUpdate).catch(() => {});
+    load();
+    const t = window.setInterval(load, 30 * 60 * 1000);
+    return () => window.clearInterval(t);
+  }, []);
   const [artifactList, setArtifactList] = useState<ArtifactSummary[] | null>(null);
   const [openedArtifact, setOpenedArtifact] = useState<Artifact | null>(null);
   const [copiedArtifact, setCopiedArtifact] = useState(false);
@@ -1179,6 +1201,7 @@ function ConsoleApp({
       .agents()
       .then((r) => {
         setAgentList(r.agents);
+        setJoinRequests(r.requests?.length ?? 0);
         setDefaultServer(r.defaultServer ?? "");
         setLocalLabel(r.defaultServer ? "Opsmira container" : "this server");
         // A server that was removed stops being the choice.
@@ -1305,7 +1328,7 @@ function ConsoleApp({
         const offline =
           !(err instanceof ApiError) &&
           (err instanceof TypeError || /failed to fetch|networkerror|load failed|connection (lost|reset)|stream/i.test(message));
-        updateTurn((t) => ({ ...t, error: offline ? undefined : message, offline }));
+        updateTurn((t) => ({ ...t, error: offline ? undefined : message, offline, ...(offline ? { offlineAt: new Date().toISOString() } : {}) }));
       }
     } finally {
       window.clearTimeout(stopTimer.current);
@@ -1641,6 +1664,7 @@ function ConsoleApp({
           onAsk={(prompt) => send(prompt)}
           onOpenArtifact={openArtifact}
           onOpenTasks={() => togglePanel("tasks")}
+          onOpenActivity={() => togglePanel("audit")}
         />
         <AnimatePresence>
           {presence && (
@@ -1683,6 +1707,15 @@ function ConsoleApp({
       <div className="relative z-20 flex w-full shrink-0 flex-row items-center gap-[2px] p-[10px_14px_0px_14px] sm:p-[12px_28px_0px_28px]">
         <IconButton icon="plus" label="New chat" onClick={startNewConversation} disabled={sending} />
         <div className="ml-auto flex flex-row items-center gap-[2px]">
+          {update?.available && update.latest?.label && (
+            <IconButton
+              icon="arrow-up"
+              label={`Update to ${update.latest.label}${update.latest.behind ? ` · ${update.latest.behind} new commit${update.latest.behind > 1 ? "s" : ""}` : ""}`}
+              dot
+              disabled={sending}
+              onClick={() => send(`Update Opsmira to ${update.latest!.label}.`)}
+            />
+          )}
           <IconButton
             ref={themeButton}
             icon={theme === "dark" ? "sun" : "moon"}
@@ -1693,7 +1726,7 @@ function ConsoleApp({
           <IconButton ref={tasksButton} icon="refresh-cw" label="Tasks" active={showTasks} dot={tasksWaiting > 0} onClick={() => togglePanel("tasks")} />
           <IconButton ref={artifactsButton} icon="file-text" label="Artifacts" active={showArtifacts} onClick={() => togglePanel("artifacts")} />
           <IconButton ref={memoryButton} icon="bookmark" label="Memory" active={showMemory} onClick={() => togglePanel("memory")} />
-          <IconButton ref={scenesButton} icon="box" label="Surfaces" active={showScenes} onClick={() => togglePanel("scenes")} />
+          <IconButton ref={scenesButton} icon="box" label={joinRequests ? `Surfaces · ${joinRequests} server${joinRequests > 1 ? "s" : ""} asking to join` : "Surfaces"} active={showScenes} dot={joinRequests > 0} onClick={() => togglePanel("scenes")} />
           <IconButton
             ref={auditButton}
             icon="scroll-text"

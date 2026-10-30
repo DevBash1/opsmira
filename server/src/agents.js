@@ -1,15 +1,20 @@
 // Servers that connect to this console themselves (opsmira-agent), instead of being reached over SSH.
 // The agent dials out over a WebSocket, so the server needs no open port and no key from you. A
 // one-time token pairs it once; after that it reconnects with a long-lived credential. Only a hash of the
-// credential is stored here.
+// credential is stored here. A server that connects without a usable token becomes a request the owner
+// accepts or declines; it waits for the answer for as long as it takes.
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "crypto";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
 import { WebSocketServer } from "ws";
 import { env } from "./env.js";
 
 const FILE = join(env.dataDir, "agents.json");
-const TOKEN_TTL_MS = 60 * 60 * 1000;
+const KEEP_TOKENS = 100;
+// Anyone who can reach the console can ask to join, so asking is bounded: requests never expire, but there are
+// only so many waiting at once, and only so many new ones from one address an hour.
+const MAX_REQUESTS = 50;
+const REQUESTS_PER_IP_HOUR = 5;
 const HELLO_TIMEOUT_MS = 10_000;
 const PING_MS = 20_000;
 export const AGENT_PATH = "/api/agent/connect";
@@ -22,12 +27,13 @@ const NAME_RE = /^[a-z0-9][a-z0-9._-]{0,39}$/;
 function load() {
   try {
     const saved = JSON.parse(readFileSync(FILE, "utf8"));
-    return { agents: Array.isArray(saved.agents) ? saved.agents : [], tokens: Array.isArray(saved.tokens) ? saved.tokens : [] };
+    const list = (v) => (Array.isArray(v) ? v : []);
+    return { agents: list(saved.agents), tokens: list(saved.tokens), requests: list(saved.requests) };
   } catch {
-    return { agents: [], tokens: [] };
+    return { agents: [], tokens: [], requests: [] };
   }
 }
-let state = existsSync(FILE) ? load() : { agents: [], tokens: [] };
+let state = existsSync(FILE) ? load() : { agents: [], tokens: [], requests: [] };
 
 function save() {
   const tmp = `${FILE}.tmp`;
@@ -38,6 +44,10 @@ function save() {
 /* ---------------- live connections ---------------- */
 /** agent id -> { ws, pending: Map<requestId, {resolve, timer}>, info, connectedAt } */
 const live = new Map();
+/** join request id -> { ws, alive }: servers waiting, connected, for the owner's answer */
+const waiting = new Map();
+/** ip -> times of the requests it made in the last hour */
+const asked = new Map();
 
 /** Whether a name can be used for a new agent. Names are what people type: agent:<name>. */
 export function cleanName(raw) {
@@ -52,14 +62,13 @@ function uniqueName(wanted) {
 }
 
 /* ---------------- pairing ---------------- */
+/** A token pairs one server. It does not expire; the newest KEEP_TOKENS unused ones are kept. */
 export function createPairingToken() {
-  const now = Date.now();
-  state.tokens = state.tokens.filter((t) => t.expiresAt > now);
   const token = `ops_connect_${randomBytes(24).toString("base64url")}`;
-  const expiresAt = now + TOKEN_TTL_MS;
-  state.tokens.push({ hash: sha(token), expiresAt });
+  state.tokens.push({ hash: sha(token), createdAt: new Date().toISOString() });
+  state.tokens = state.tokens.slice(-KEEP_TOKENS);
   save();
-  return { token, expiresAt };
+  return { token };
 }
 
 /**
@@ -78,7 +87,7 @@ export function createAgentCredential(wantedName) {
 /** Uses a token once. True when it was valid. */
 function consumeToken(token) {
   const hash = sha(token);
-  const index = state.tokens.findIndex((t) => t.hash === hash && t.expiresAt > Date.now());
+  const index = state.tokens.findIndex((t) => t.hash === hash);
   if (index < 0) return false;
   state.tokens.splice(index, 1);
   save();
@@ -93,6 +102,96 @@ function findByCredential(credential) {
   });
 }
 
+/* ---------------- join requests ---------------- */
+function newAgent(wanted, info) {
+  const credential = `ops_agent_${randomBytes(32).toString("base64url")}`;
+  const agent = { id: randomUUID(), name: uniqueName(wanted), credentialHash: sha(credential), createdAt: new Date().toISOString(), info };
+  state.agents.push(agent);
+  return { agent, credential };
+}
+
+const findRequest = (secret) => {
+  const hash = sha(secret);
+  return state.requests.find((r) => r.secretHash === hash) ?? null;
+};
+
+/** Whether this address may open another request now (and counts it if so). */
+function mayAsk(ip) {
+  const hour = Date.now() - 60 * 60 * 1000;
+  const times = (asked.get(ip) ?? []).filter((t) => t > hour);
+  if (times.length >= REQUESTS_PER_IP_HOUR) return false;
+  times.push(Date.now());
+  asked.set(ip, times);
+  return true;
+}
+
+export function listRequests() {
+  return state.requests
+    .filter((r) => r.status === "pending")
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      hostname: r.info?.hostname ?? null,
+      platform: r.info?.platform ?? null,
+      os: r.info?.os === "win32" ? "windows" : r.info?.os ? "unix" : null,
+      access: r.info?.access ?? "read-only",
+      ip: r.ip ?? null,
+      oldToken: !!r.oldToken,
+      online: waiting.has(r.id),
+      createdAt: r.createdAt,
+      lastSeen: r.lastSeen ?? null,
+    }));
+}
+
+/**
+ * The owner's answer. The waiting server is told and disconnected; it reconnects at once and is admitted (accept)
+ * or uninstalls itself (decline). A server that is offline gets the answer the next time it connects.
+ */
+function answer(id, status) {
+  const r = state.requests.find((x) => x.id === id && x.status === "pending");
+  if (!r) return false;
+  r.status = status;
+  r.answeredAt = new Date().toISOString();
+  // keep declined ones (so a returning server is told) but not forever
+  const declined = state.requests.filter((x) => x.status === "declined");
+  if (declined.length > 200) state.requests = state.requests.filter((x) => x !== declined[0]);
+  save();
+  const w = waiting.get(id);
+  if (w && w.ws.readyState === 1) {
+    w.ws.send(JSON.stringify({ type: status, id }));
+    w.ws.close(4002, status);
+  }
+  return true;
+}
+export const acceptRequest = (id) => answer(id, "accepted");
+export const declineRequest = (id) => answer(id, "declined");
+
+/* ---------------- updating agents ---------------- */
+let bundled = { mtime: 0, sha256: null, version: null };
+/** The agent this console ships (agent/opsmira-agent.mjs): what connected agents are updated to. */
+export function bundledAgent() {
+  try {
+    const file = join(env.agentDir, "opsmira-agent.mjs");
+    const mtime = statSync(file).mtimeMs;
+    if (mtime !== bundled.mtime) {
+      const text = readFileSync(file);
+      bundled = { mtime, sha256: createHash("sha256").update(text).digest("hex"), version: /export const VERSION = "([^"]+)"/.exec(String(text))?.[1] ?? null };
+    }
+  } catch {
+    bundled = { mtime: 0, sha256: null, version: null };
+  }
+  return bundled;
+}
+
+/** An agent that can update itself and runs other code than this console ships is sent the new version. */
+function offerUpdate(ws, info) {
+  if (/^(0|off|false|no)$/i.test(process.env.OPSMIRA_AGENT_UPDATES ?? "")) return;
+  const b = bundledAgent();
+  if (!b.sha256 || !info.caps?.includes("update") || info.autoUpdate === false) return;
+  if (!info.sha256 || info.sha256 === b.sha256 || info.updateFailed === b.sha256) return;
+  ws.send(JSON.stringify({ type: "update", sha256: b.sha256, version: b.version }));
+}
+
 /* ---------------- public API ---------------- */
 export function listAgents() {
   return state.agents.map((a) => ({
@@ -105,6 +204,8 @@ export function listAgents() {
     platform: a.info?.platform ?? null,
     os: a.info?.os === "win32" ? "windows" : a.info?.os ? "unix" : null,
     appLog: a.info?.appLog ?? null,
+    version: a.info?.agent || null,
+    current: a.info?.sha256 ? a.info.sha256 === bundledAgent().sha256 : null,
     createdAt: a.createdAt,
     lastSeen: a.lastSeen ?? null,
   }));
@@ -164,6 +265,18 @@ export async function runOnAgent(name, command, { signal } = {}) {
   return { exitCode: r.code, signal: r.signal ?? null, output: r.output, durationMs: r.durationMs ?? Date.now() - started, timedOut: !!r.timedOut };
 }
 
+/** What a connected agent says it can do (e.g. "update", "detach"). */
+export function agentCaps(name) {
+  const agent = agentByName(name);
+  return (agent && live.get(agent.id)?.info?.caps) || [];
+}
+
+/** Messages an agent sends on its own (a detached run's log and report): one handler, set by detach.js. */
+let eventHandler = null;
+export function onAgentEvent(fn) {
+  eventHandler = fn;
+}
+
 /** "windows" for a connected Windows agent (its commands are PowerShell), else "unix". */
 export function agentOs(name) {
   const agent = agentByName(name);
@@ -187,11 +300,13 @@ export function attachAgentGateway(server) {
       socket.destroy();
       return;
     }
-    wss.handleUpgrade(req, socket, head, (ws) => handle(ws));
+    wss.handleUpgrade(req, socket, head, (ws) => handle(ws, req));
   });
 
-  function handle(ws) {
+  function handle(ws, req) {
     let agent = null;
+    let request = null; // the join request this connection is waiting on
+    const ip = (env.trustProxy ? String(req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || "").split(",")[0].trim() : "") || req.socket.remoteAddress || "";
     const refuse = (error, fatal = true) => {
       try {
         ws.send(JSON.stringify({ type: "error", error, fatal }));
@@ -211,6 +326,7 @@ export function attachAgentGateway(server) {
       }
 
       if (!agent) {
+        if (request) return; // a server waiting for the owner can only wait
         if (msg?.type !== "hello") return refuse("expected hello");
         clearTimeout(helloTimer);
         const info = {
@@ -220,19 +336,48 @@ export function attachAgentGateway(server) {
           access: msg.info?.access === "operate" ? "operate" : "read-only",
           os: typeof msg.info?.os === "string" ? msg.info.os.slice(0, 20) : undefined,
           appLog: typeof msg.info?.appLog === "string" ? msg.info.appLog.slice(0, 200) : undefined,
+          caps: Array.isArray(msg.info?.caps) ? msg.info.caps.filter((c) => typeof c === "string").slice(0, 10).map((c) => c.slice(0, 20)) : [],
+          sha256: typeof msg.info?.sha256 === "string" ? msg.info.sha256.slice(0, 64) : undefined,
+          autoUpdate: msg.info?.autoUpdate !== false,
+          updateFailed: typeof msg.info?.updateFailed === "string" ? msg.info.updateFailed.slice(0, 64) : undefined,
         };
+        const wanted = cleanName(msg.name) ?? cleanName(info.hostname) ?? "server";
         let credential = null;
+        const known = typeof msg.request === "string" && msg.request ? findRequest(msg.request) : null;
         if (typeof msg.credential === "string" && msg.credential) {
           agent = findByCredential(msg.credential);
           if (!agent) return refuse("unknown or revoked credential");
-        } else if (typeof msg.token === "string" && msg.token) {
-          if (!consumeToken(msg.token)) return refuse("invalid or expired token");
-          const wanted = cleanName(msg.name) ?? cleanName(info.hostname) ?? "server";
-          credential = `ops_agent_${randomBytes(32).toString("base64url")}`;
-          agent = { id: randomUUID(), name: uniqueName(wanted), credentialHash: sha(credential), createdAt: new Date().toISOString() };
-          state.agents.push(agent);
+        } else if (typeof msg.token === "string" && msg.token && consumeToken(msg.token)) {
+          ({ agent, credential } = newAgent(wanted, info));
+        } else if (known?.status === "accepted") {
+          ({ agent, credential } = newAgent(known.name, info));
+          state.requests = state.requests.filter((r) => r !== known);
+        } else if (known?.status === "declined") {
+          state.requests = state.requests.filter((r) => r !== known);
+          save();
+          ws.send(JSON.stringify({ type: "declined", id: known.id }));
+          ws.close(4002, "declined");
+          return;
         } else {
-          return refuse("missing token or credential");
+          // No usable token: ask the owner. A server that asked before keeps its place in the queue.
+          let r = known;
+          let secret = null;
+          if (!r) {
+            if (state.requests.filter((x) => x.status === "pending").length >= MAX_REQUESTS) return refuse("too many servers are waiting to join; ask the console owner", false);
+            if (!mayAsk(ip)) return refuse("too many join requests from this address; try again later", false);
+            secret = `ops_request_${randomBytes(24).toString("base64url")}`;
+            r = { id: randomUUID(), secretHash: sha(secret), name: wanted, status: "pending", createdAt: new Date().toISOString(), oldToken: typeof msg.token === "string" && !!msg.token };
+            state.requests.push(r);
+          }
+          r.info = info;
+          r.ip = ip.slice(0, 64);
+          r.lastSeen = new Date().toISOString();
+          save();
+          request = r;
+          waiting.get(r.id)?.ws.close(4000, "replaced");
+          waiting.set(r.id, { ws, alive: true });
+          ws.send(JSON.stringify({ type: "pending", id: r.id, name: r.name, ...(secret ? { secret } : {}) }));
+          return;
         }
 
         // One connection per agent: a newer one replaces the old.
@@ -243,6 +388,16 @@ export function attachAgentGateway(server) {
         const conn = { ws, pending: new Map(), info, alive: true };
         live.set(agent.id, conn);
         ws.send(JSON.stringify({ type: "ready", id: agent.id, name: agent.name, ...(credential ? { credential } : {}) }));
+        offerUpdate(ws, info);
+        return;
+      }
+
+      if (typeof msg?.type === "string" && msg.type.startsWith("detach-")) {
+        try {
+          eventHandler?.(`${AGENT_PREFIX}${agent.name}`, msg, (reply) => ws.readyState === 1 && ws.send(JSON.stringify(reply)));
+        } catch {
+          // a bad message from one agent must not take the gateway down
+        }
         return;
       }
 
@@ -263,12 +418,13 @@ export function attachAgentGateway(server) {
     });
 
     ws.on("pong", () => {
-      const conn = agent && live.get(agent.id);
+      const conn = agent ? live.get(agent.id) : request ? waiting.get(request.id) : null;
       if (conn) conn.alive = true;
     });
 
     ws.on("close", () => {
       clearTimeout(helloTimer);
+      if (request && waiting.get(request.id)?.ws === ws) waiting.delete(request.id);
       if (!agent) return;
       const conn = live.get(agent.id);
       if (conn?.ws !== ws) return; // a newer connection replaced this one
@@ -289,7 +445,7 @@ export function attachAgentGateway(server) {
 
   // Drop connections that stopped answering pings (a cable pulled, a laptop closed).
   const beat = setInterval(() => {
-    for (const conn of live.values()) {
+    for (const conn of [...live.values(), ...waiting.values()]) {
       if (!conn.alive) {
         conn.ws.terminate();
         continue;

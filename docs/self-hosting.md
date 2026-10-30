@@ -95,9 +95,26 @@ port and you hand over no key. Prefer not to install anything? The panel also ha
 
 **Running in a container (Docker, Kubernetes)?** "This server" is then only the container, so install the agent on the host as above and set `OPSMIRA_DEFAULT_SERVER=agent:<name>`. Commands and surfaces then go to the host by default; the agent can still reach the container by naming `local`.
 
-- **Pairing:** the command carries a one-time token that expires in an hour. After pairing, the agent keeps a
+- **Pairing:** the command carries a token that works once and does not expire. After pairing, the agent keeps a
   long-lived credential in its state file (mode 0600); the console stores only a hash of it.
-- **Reconnects** by itself. **Remove** in the Surfaces menu revokes it at once and the agent stops.
+- **Asking to join:** an agent started without a token, or with one that was used already, shows up under
+  **Connect a server** as a request: its name, hostname, address and the access it wants. It waits connected
+  for as long as it takes. **Accept** pairs it; **Decline** tells it to remove itself (the service, its files,
+  and the `opsmira-agent` account if the installer made it). An answer given while it is offline reaches it when
+  it comes back. Anyone who can reach the console can ask, so at most 50 requests wait at once and an address
+  can open 5 an hour; nothing is admitted without you.
+- **Keeps itself current.** When the console ships a different agent (after the console is updated), connected
+  agents download it from the console, check its sha256, test-run it and restart into it; one that cannot
+  connect three times running goes back to the installed version. This includes read-only agents: read-only
+  still blocks every command, but the console can now change the agent's code, so a console that has been
+  taken over could too. `--no-auto-update` (installer and agent) keeps a version fixed.
+- **Detached runs:** for a change that takes the console down while it runs (upgrading the proxy in front of
+  it, updating Opsmira), the AI can hand the job to an `operate` agent's server, which runs it on its own and
+  reports back. It always asks first. See [detach.md](detach.md).
+- **Reconnects** by itself. **Remove** in the Surfaces menu revokes it at once. An installed agent then asks to
+  join again (it shows as a request, flagged "came with a used token"): **Decline** it and it removes itself from
+  that server, or uninstall it there with `--uninstall`. The same happens if the console loses its data: agents
+  come back as requests instead of being lost.
 - **Read-only by default.** The agent runs only the read-only programs the surfaces use, so surfaces work and
   nothing can change. Add `--access operate` to the command to let the console run shell commands there: the
   AI can then `inspect` it, and propose changes that wait for your approval exactly as on this server. Proposal
@@ -111,6 +128,7 @@ port and you hand over no key. Prefer not to install anything? The panel also ha
 - **Use HTTPS (`wss://`).** Over plain `ws://` the credential crosses the network unencrypted; the installer
   and the agent both warn.
 - **Remove it:** `curl -fsSL https://CONSOLE/agent/install.sh | sudo sh -s -- --uninstall`, then Remove in the console.
+  Agents installed before join requests, self-update and detached runs existed get them by running the installer once more.
 - Trust: the agent obeys the console it paired with. Anyone who controls the console can use an `operate`
   agent's account, so protect the console like an SSH key.
 
@@ -156,6 +174,14 @@ hosts, and two generated secrets (`.admin-password`, `.session-secret`). Back it
 
 Upgrade: `git pull && npm run setup && npm run build`, then restart (Docker: `docker compose pull && docker compose up -d`).
 Read [CHANGELOG.md](../CHANGELOG.md) first. Data formats are kept backward compatible within a major version.
+
+The console checks GitHub for a newer Opsmira every few hours: a release build against the latest release, an
+`:edge` build (or a checkout of `main`) against the newest commit. When there is one, an **Update** button shows
+in the top bar; it asks the AI to update this console, which knows how it was installed (Kubernetes, Docker, the
+install script, a checkout) and runs the update detached on the server that hosts it, because an update restarts
+the console mid-reply. Without a connected agent there, it gives you the commands to run. Connected agents then
+update themselves. `OPSMIRA_UPDATE_CHECK=off` turns the check off; `OPSMIRA_AGENT_UPDATES=off` stops pushing
+agent updates.
 
 ## Troubleshooting
 
