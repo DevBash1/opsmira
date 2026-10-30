@@ -325,6 +325,12 @@ export function attachAgentGateway(server) {
         return;
       }
 
+      // Agents ping so they notice a connection that died without closing; answer while paired or waiting.
+      if (msg?.type === "ping" && (agent || request)) {
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: "pong" }));
+        return;
+      }
+
       if (!agent) {
         if (request) return; // a server waiting for the owner can only wait
         if (msg?.type !== "hello") return refuse("expected hello");
@@ -376,7 +382,7 @@ export function attachAgentGateway(server) {
           request = r;
           waiting.get(r.id)?.ws.close(4000, "replaced");
           waiting.set(r.id, { ws, alive: true });
-          ws.send(JSON.stringify({ type: "pending", id: r.id, name: r.name, ...(secret ? { secret } : {}) }));
+          ws.send(JSON.stringify({ type: "pending", id: r.id, name: r.name, heartbeat: true, ...(secret ? { secret } : {}) }));
           return;
         }
 
@@ -387,7 +393,7 @@ export function attachAgentGateway(server) {
         save();
         const conn = { ws, pending: new Map(), info, alive: true };
         live.set(agent.id, conn);
-        ws.send(JSON.stringify({ type: "ready", id: agent.id, name: agent.name, ...(credential ? { credential } : {}) }));
+        ws.send(JSON.stringify({ type: "ready", id: agent.id, name: agent.name, heartbeat: true, ...(credential ? { credential } : {}) }));
         offerUpdate(ws, info);
         return;
       }

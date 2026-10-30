@@ -46,6 +46,16 @@ const SELF_SHA = (() => {
 })();
 /** Exit code that means "declined: uninstall me" to the systemd unit the installer writes. */
 export const DECLINED_EXIT = 78;
+/**
+ * Staying connected, for as long as the agent runs: only the owner (Decline) or an update ends it. A connection that
+ * does not answer within CONNECT_TIMEOUT is dropped and tried again; once connected, the agent pings the console
+ * every HEARTBEAT and reconnects when it has heard nothing for three of them (a network that died without closing
+ * anything). Between tries it waits 1, 2, 4... up to 30 seconds, forever.
+ */
+const ms = (name, fallback) => Number(process.env[name]) || fallback;
+const CONNECT_TIMEOUT = ms("OPSMIRA_AGENT_CONNECT_TIMEOUT_MS", 30_000);
+const HEARTBEAT = ms("OPSMIRA_AGENT_HEARTBEAT_MS", 25_000);
+const MAX_RETRY_DELAY = 30_000;
 
 /* ---------------- policy: what read-only allows ---------------- */
 
@@ -197,9 +207,35 @@ function writeState(file, state) {
 }
 
 function connect(opts, state, onClose) {
-  const ws = new WebSocket(opts.server);
+  let ws;
+  try {
+    ws = new WebSocket(opts.server);
+  } catch (err) {
+    log(`cannot connect to ${opts.server}: ${err.message}`);
+    setTimeout(() => onClose(false), 0);
+    return null;
+  }
   let ready = false;
+  let answered = false; // the console replied to the hello (ready, pending or an error)
+  let heartbeat = false; // the console answers pings (consoles from before this do not)
+  let lastHeard = Date.now();
   const running = new Map(); // request id -> child process, so the console can cancel (Stop)
+  const drop = (why) => {
+    log(why);
+    end();
+    try {
+      ws.close();
+    } catch {
+      // dropping anyway
+    }
+  };
+  // Nothing answers (packets dropped, a proxy that holds the request): give up on this try and start another.
+  const opening = setTimeout(() => !answered && drop("no answer from the console; trying again"), CONNECT_TIMEOUT);
+  const beat = setInterval(() => {
+    if (!heartbeat || ws.readyState !== 1) return;
+    if (Date.now() - lastHeard > HEARTBEAT * 3) return drop("the console stopped answering; reconnecting");
+    ws.send(JSON.stringify({ type: "ping" }));
+  }, HEARTBEAT);
 
   ws.addEventListener("open", () => {
     const hello = {
@@ -234,7 +270,11 @@ function connect(opts, state, onClose) {
     } catch {
       return;
     }
+    lastHeard = Date.now();
+    if (msg.type === "pong") return;
     if (msg.type === "pending") {
+      answered = true;
+      heartbeat = !!msg.heartbeat;
       if (msg.secret) {
         state.request = msg.secret;
         writeState(opts.state, state);
@@ -265,6 +305,8 @@ function connect(opts, state, onClose) {
     }
     if (msg.type === "ready") {
       ready = true;
+      answered = true;
+      heartbeat = !!msg.heartbeat;
       opts.ready = true;
       // Running an update that connected: from now on it is the version to start.
       if (state.update?.sha256 === SELF_SHA && !state.update.ok) {
@@ -285,15 +327,14 @@ function connect(opts, state, onClose) {
       return;
     }
     if (msg.type === "error") {
+      answered = true;
       log(`refused: ${msg.error}`);
-      if (msg.fatal) {
-        // A revoked credential or a used token will never work again: stop instead of hammering the console.
-        if (state.credential && /revoked|unknown/i.test(msg.error)) {
-          delete state.credential;
-          writeState(opts.state, state);
-        }
-        process.exitCode = 1;
-        opts.stop = true;
+      // Never a reason to stop: the console closes the connection and the agent tries again. A credential the console
+      // no longer knows (removed there, or its data was lost) is dropped, so the next try asks to join instead.
+      if (msg.fatal && state.credential && /revoked|unknown/i.test(msg.error)) {
+        delete state.credential;
+        writeState(opts.state, state);
+        log("the console no longer knows this server; it will ask to join again");
       }
       return;
     }
@@ -329,6 +370,8 @@ function connect(opts, state, onClose) {
   const end = () => {
     if (ended) return;
     ended = true;
+    clearTimeout(opening);
+    clearInterval(beat);
     opts.ready = false;
     onClose(ready);
   };
@@ -611,9 +654,18 @@ async function startUpdate(opts, state) {
   if (!u.ok) u.tries = (u.tries ?? 0) + 1;
   writeState(opts.state, state);
   process.env.OPSMIRA_AGENT_UPDATED = "1";
-  const mod = await import(pathToFileURL(u.file).href);
-  await mod.main();
-  return true;
+  try {
+    const mod = await import(pathToFileURL(u.file).href);
+    await mod.main();
+    return true;
+  } catch (err) {
+    // An update that does not even load: forget it and carry on with the installed version.
+    u.failed = true;
+    writeState(opts.state, state);
+    log(`update ${u.version ?? ""} would not start (${err.message}); running the installed version`);
+    delete process.env.OPSMIRA_AGENT_UPDATED;
+    return false;
+  }
 }
 
 /* ---------------- running an app under the agent ---------------- */
@@ -724,6 +776,11 @@ export async function main() {
     opts.appLog = undefined;
   }
   if (typeof args.supervised === "string") process.env.OPSMIRA_SUPERVISED = args.supervised;
+  // A bug in one request must not take the connection down for good: log it and keep going.
+  if (!process.env.OPSMIRA_AGENT_UPDATED) {
+    process.on("uncaughtException", (err) => log(`unexpected error (still running): ${err?.stack || err}`));
+    process.on("unhandledRejection", (err) => log(`unexpected error (still running): ${err?.stack || err}`));
+  }
   const state = opts.credential ? { credential: opts.credential } : existsSync(opts.state) ? readState(opts.state) : {};
   if (await startUpdate(opts, state)) return;
   if (!state.credential && !opts.token && !state.request) log("no token: this server will ask to join, and the console owner accepts or declines it (Connect a server).");
@@ -738,17 +795,36 @@ export async function main() {
   if (canDetach(opts)) relayDetached(opts);
 
   let delay = 1000;
+  let timer = null;
+  let failures = 0;
+  let quietSince = 0;
   const loop = () => {
+    timer = null;
     if (opts.stop) return;
+    opts.lastAttempt = Date.now();
     connect(opts, state, (wasReady) => {
       if (opts.stop) return;
-      delay = opts.reconnectNow ? 0 : wasReady ? 1000 : Math.min(delay * 2, 30000);
+      delay = opts.reconnectNow ? 0 : wasReady ? 1000 : Math.min(delay * 2, MAX_RETRY_DELAY);
       opts.reconnectNow = false;
-      log(`disconnected; retrying in ${Math.round(delay / 1000)}s`);
-      setTimeout(loop, delay);
+      failures = wasReady ? 1 : failures + 1;
+      // Every try is logged at first; after that, one line every 10 minutes, so years offline stay readable.
+      if (failures <= 10 || Date.now() - quietSince > 10 * 60_000) {
+        log(failures > 10 ? `still trying to reach the console (${failures} tries so far); next in ${Math.round(delay / 1000)}s` : `disconnected; retrying in ${Math.round(delay / 1000)}s`);
+        if (failures > 10) quietSince = Date.now();
+      }
+      timer = setTimeout(loop, delay);
     });
   };
   loop();
+  // Whatever goes wrong, never end up neither connected nor about to try again. This timer also keeps the process
+  // alive: the agent only leaves when it means to (declined, updating, or its app exited).
+  setInterval(() => {
+    if (opts.stop || timer) return;
+    if (opts.socket && opts.socket.readyState <= 1) return; // connecting or connected
+    if (Date.now() - (opts.lastAttempt ?? 0) < 2 * MAX_RETRY_DELAY) return;
+    log("not connected and no try scheduled; trying again");
+    loop();
+  }, MAX_RETRY_DELAY);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

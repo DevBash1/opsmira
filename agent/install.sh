@@ -164,6 +164,8 @@ UNEOF
 Description=Opsmira agent
 After=network-online.target
 Wants=network-online.target
+# Never give up restarting it (systemd stops after 5 starts in 10 s by default).
+StartLimitIntervalSec=0
 
 [Service]
 User=$RUN_AS

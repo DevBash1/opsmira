@@ -34,6 +34,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
   app under the agent so every deploy reconnects as the same server and its output can be read.
 
 ### Fixed
+- Agents never give up on their console: a connection attempt that gets no answer is dropped after 30 s and tried
+  again, a connection that dies without closing is noticed by a heartbeat (25 s ping, 75 s silence), a removed or
+  forgotten credential makes the agent ask to join again instead of exiting, an unexpected error is logged instead
+  of ending the process, and the service restarts it without systemd's start limit. Retries stay at most 30 s
+  apart forever, with a log line every 10 minutes once it has been offline a while.
 - An agent no longer exits when its console answers the connection with an error (a proxy's 502 while the console
   restarts): Node's WebSocket reports that without a close event, so the agent never retried and quit (systemd hid
   it by restarting the service). It now retries like any other lost connection.

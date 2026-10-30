@@ -111,7 +111,13 @@ port and you hand over no key. Prefer not to install anything? The panel also ha
 - **Detached runs:** for a change that takes the console down while it runs (upgrading the proxy in front of
   it, updating Opsmira), the AI can hand the job to an `operate` agent's server, which runs it on its own and
   reports back. It always asks first. See [detach.md](detach.md).
-- **Reconnects** by itself. **Remove** in the Surfaces menu revokes it at once. An installed agent then asks to
+- **Never stops trying.** Whatever happens to the network or the console (down, unreachable, a proxy answering
+  errors, a connection that dies without closing), the agent keeps reconnecting: 1, 2, 4... up to 30 seconds
+  between tries, for as long as it runs. A try that gets no answer is given up after 30 seconds, and once
+  connected it pings the console every 25 seconds and reconnects if it hears nothing for 75. After the first
+  minutes offline it logs one line every 10 minutes. Only Decline (and restarting into an update) ends it; the
+  installer's service also restarts it without limit if it ever exits.
+- **Remove** in the Surfaces menu revokes it at once. An installed agent then asks to
   join again (it shows as a request, flagged "came with a used token"): **Decline** it and it removes itself from
   that server, or uninstall it there with `--uninstall`. The same happens if the console loses its data: agents
   come back as requests instead of being lost.
