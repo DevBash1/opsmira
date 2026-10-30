@@ -70,7 +70,11 @@ test("a server without a token waits as a request; accepting it pairs it, and a 
   assert.equal(agents.acceptRequest(req.id), true);
   const agent = await until(() => agents.listAgents().find((x) => x.name === "asker" && x.online));
   assert.equal(agents.listRequests().length, 0);
-  const saved = JSON.parse(readFileSync(a.state, "utf8"));
+  // Let in on the connection it was waiting on: it saves the credential it was handed.
+  const saved = await until(() => {
+    const st = JSON.parse(readFileSync(a.state, "utf8"));
+    return st.credential ? st : null;
+  });
   assert.match(saved.credential, /^ops_agent_/);
   assert.equal(saved.request, undefined);
 

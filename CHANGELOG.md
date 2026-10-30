@@ -34,6 +34,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
   app under the agent so every deploy reconnects as the same server and its output can be read.
 
 ### Fixed
+- Accepting a server that asked to join could loop (Accept, it vanishes, it asks again) for agents from before join
+  requests: they do not keep the request's secret and came back as a new request. A server still waiting is now
+  let in on the connection it waits on, an old agent's repeat requests are recognised by its token (one request,
+  not one per reconnect), and declining one keeps turning it away instead of letting it ask again.
 - Agents never give up on their console: a connection attempt that gets no answer is dropped after 30 s and tried
   again, a connection that dies without closing is noticed by a heartbeat (25 s ping, 75 s silence), a removed or
   forgotten credential makes the agent ask to join again instead of exiting, an unexpected error is logged instead

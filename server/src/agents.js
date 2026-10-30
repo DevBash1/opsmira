@@ -114,6 +114,11 @@ const findRequest = (secret) => {
   const hash = sha(secret);
   return state.requests.find((r) => r.secretHash === hash) ?? null;
 };
+/** Agents from before join requests do not keep the request's secret; they come back with the same used token. */
+const findRequestByToken = (token) => {
+  const hash = sha(token);
+  return state.requests.find((r) => r.tokenHash === hash) ?? null;
+};
 
 /** Whether this address may open another request now (and counts it if so). */
 function mayAsk(ip) {
@@ -150,13 +155,18 @@ export function listRequests() {
 function answer(id, status) {
   const r = state.requests.find((x) => x.id === id && x.status === "pending");
   if (!r) return false;
+  const w = waiting.get(id);
+  // Still connected and waiting: let it in on this connection (every agent version understands "ready").
+  if (status === "accepted" && w?.admit && w.ws.readyState === 1) {
+    w.admit();
+    return true;
+  }
   r.status = status;
   r.answeredAt = new Date().toISOString();
   // keep declined ones (so a returning server is told) but not forever
   const declined = state.requests.filter((x) => x.status === "declined");
   if (declined.length > 200) state.requests = state.requests.filter((x) => x !== declined[0]);
   save();
-  const w = waiting.get(id);
   if (w && w.ws.readyState === 1) {
     w.ws.send(JSON.stringify({ type: status, id }));
     w.ws.close(4002, status);
@@ -317,6 +327,19 @@ export function attachAgentGateway(server) {
     };
     const helloTimer = setTimeout(() => refuse("no hello"), HELLO_TIMEOUT_MS);
 
+    /** The connection is now this agent's (paired, reconnected, or let in from the waiting list). */
+    const goLive = (info, credential) => {
+      // One connection per agent: a newer one replaces the old.
+      live.get(agent.id)?.ws.close(4000, "replaced");
+      agent.info = info;
+      agent.lastSeen = new Date().toISOString();
+      save();
+      const conn = { ws, pending: new Map(), info, alive: true };
+      live.set(agent.id, conn);
+      ws.send(JSON.stringify({ type: "ready", id: agent.id, name: agent.name, heartbeat: true, ...(credential ? { credential } : {}) }));
+      offerUpdate(ws, info);
+    };
+
     ws.on("message", (data) => {
       let msg;
       try {
@@ -349,7 +372,9 @@ export function attachAgentGateway(server) {
         };
         const wanted = cleanName(msg.name) ?? cleanName(info.hostname) ?? "server";
         let credential = null;
-        const known = typeof msg.request === "string" && msg.request ? findRequest(msg.request) : null;
+        const known =
+          (typeof msg.request === "string" && msg.request ? findRequest(msg.request) : null) ??
+          (typeof msg.token === "string" && msg.token && !msg.credential ? findRequestByToken(msg.token) : null);
         if (typeof msg.credential === "string" && msg.credential) {
           agent = findByCredential(msg.credential);
           if (!agent) return refuse("unknown or revoked credential");
@@ -359,8 +384,12 @@ export function attachAgentGateway(server) {
           ({ agent, credential } = newAgent(known.name, info));
           state.requests = state.requests.filter((r) => r !== known);
         } else if (known?.status === "declined") {
-          state.requests = state.requests.filter((r) => r !== known);
-          save();
+          // A current agent removes itself on hearing it, so the record can go. An old one cannot, and would only ask
+          // again: keep the record so it keeps being turned away.
+          if (info.caps.includes("pending")) {
+            state.requests = state.requests.filter((r) => r !== known);
+            save();
+          }
           ws.send(JSON.stringify({ type: "declined", id: known.id }));
           ws.close(4002, "declined");
           return;
@@ -373,6 +402,7 @@ export function attachAgentGateway(server) {
             if (!mayAsk(ip)) return refuse("too many join requests from this address; try again later", false);
             secret = `ops_request_${randomBytes(24).toString("base64url")}`;
             r = { id: randomUUID(), secretHash: sha(secret), name: wanted, status: "pending", createdAt: new Date().toISOString(), oldToken: typeof msg.token === "string" && !!msg.token };
+            if (r.oldToken) r.tokenHash = sha(msg.token);
             state.requests.push(r);
           }
           r.info = info;
@@ -381,20 +411,20 @@ export function attachAgentGateway(server) {
           save();
           request = r;
           waiting.get(r.id)?.ws.close(4000, "replaced");
-          waiting.set(r.id, { ws, alive: true });
+          const admit = () => {
+            ({ agent, credential } = newAgent(r.name, info));
+            // this request, and any copies of it from the same server (old agents ask again on every reconnect)
+            state.requests = state.requests.filter((x) => x !== r && !(x.name === r.name && x.ip === r.ip && x.status !== "declined"));
+            waiting.delete(r.id);
+            request = null;
+            goLive(info, credential);
+          };
+          waiting.set(r.id, { ws, alive: true, admit });
           ws.send(JSON.stringify({ type: "pending", id: r.id, name: r.name, heartbeat: true, ...(secret ? { secret } : {}) }));
           return;
         }
 
-        // One connection per agent: a newer one replaces the old.
-        live.get(agent.id)?.ws.close(4000, "replaced");
-        agent.info = info;
-        agent.lastSeen = new Date().toISOString();
-        save();
-        const conn = { ws, pending: new Map(), info, alive: true };
-        live.set(agent.id, conn);
-        ws.send(JSON.stringify({ type: "ready", id: agent.id, name: agent.name, heartbeat: true, ...(credential ? { credential } : {}) }));
-        offerUpdate(ws, info);
+        goLive(info, credential);
         return;
       }
 
