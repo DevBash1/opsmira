@@ -34,6 +34,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
   app under the agent so every deploy reconnects as the same server and its output can be read.
 
 ### Fixed
+- An agent no longer exits when its console answers the connection with an error (a proxy's 502 while the console
+  restarts): Node's WebSocket reports that without a close event, so the agent never retried and quit (systemd hid
+  it by restarting the service). It now retries like any other lost connection.
+- Re-running the agent installer restarts the agent, so the new version runs at once (it used to keep the old one
+  running until the next restart).
 - The "connection lost" screen showed made-up servers, routes and paused actions. It now shows when the
   connection dropped, whether the console answers again (checked live), and points to Activity before "Send again".
 - Every command and approval card now says where it runs: the connected server's name, or "this server" (or

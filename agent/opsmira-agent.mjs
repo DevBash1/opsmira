@@ -325,11 +325,25 @@ function connect(opts, state, onClose) {
   });
 
   opts.socket = ws;
-  ws.addEventListener("close", () => {
+  let ended = false;
+  const end = () => {
+    if (ended) return;
+    ended = true;
     opts.ready = false;
     onClose(ready);
+  };
+  ws.addEventListener("close", end);
+  // Node 22's WebSocket reports a refused upgrade (a proxy's 502 while the console restarts) as an error and never
+  // closes: without this the agent would be left with nothing to wait on and exit instead of trying again.
+  ws.addEventListener("error", () => {
+    if (ended) return; // closing a socket that never opened fires "error" again
+    end();
+    try {
+      ws.close();
+    } catch {
+      // ending anyway
+    }
   });
-  ws.addEventListener("error", () => {});
   return ws;
 }
 

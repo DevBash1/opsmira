@@ -186,11 +186,15 @@ WantedBy=multi-user.target
 UNITEOF
 fi
 run systemctl daemon-reload
-run systemctl enable --now opsmira-agent
+run systemctl enable opsmira-agent
+# restart, not just start: on a re-run the old version is still running and would keep running
+run systemctl restart opsmira-agent
 
 say ""
 if [ -n "$TOKEN" ]; then
   say "Done. It should appear as 'agent:$NAME' in the console's Surfaces menu in a few seconds."
+elif grep -q '"credential"' "$STATE_DIR/state.json" 2>/dev/null; then
+  say "Done. It reconnects as before with its saved credential (agent:$NAME)."
 else
   say "Done. It is asking to join: accept it in the console (Surfaces, Connect a server). Declining it removes the agent from this server."
 fi

@@ -127,6 +127,28 @@ test("an agent running other code than the console ships updates itself, and kee
   assert.equal(JSON.parse(readFileSync(first.state, "utf8")).update.ok, true);
 });
 
+test("an agent keeps trying while a proxy answers 502 (the console restarting) instead of exiting", async () => {
+  const proxy = createServer((req, res) => {
+    res.writeHead(502);
+    res.end();
+  });
+  proxy.on("upgrade", (req, socket) => socket.end("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n"));
+  await new Promise((r) => proxy.listen(0, "127.0.0.1", r));
+  const state = join(mkdtempSync(join(tmpdir(), "opsmira-agent-")), "state.json");
+  const child = spawn(process.execPath, [AGENT, "--server", `ws://127.0.0.1:${proxy.address().port}${agents.AGENT_PATH}`, "--state", state, "--name", "patient"], { stdio: ["ignore", "pipe", "pipe"] });
+  children.push(child);
+  let out = "";
+  child.stdout.on("data", (c) => (out += c));
+  let exited = null;
+  child.on("exit", (code) => (exited = code));
+  await until(() => /disconnected; retrying/.test(out));
+  await new Promise((r) => setTimeout(r, 2500));
+  assert.equal(exited, null, `the agent exited (${exited}):\n${out}`);
+  assert.ok((out.match(/disconnected; retrying/g) ?? []).length >= 2);
+  child.kill();
+  proxy.close();
+});
+
 test("an agent started with --no-auto-update is left alone", async () => {
   const dir = mkdtempSync(join(tmpdir(), "opsmira-old-agent-"));
   const old = join(dir, "opsmira-agent.mjs");
