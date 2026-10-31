@@ -1193,9 +1193,9 @@ function ConsoleApp({
     let runs: DetachedRun[];
     try {
       runs = (await api.detached()).runs;
-    } catch {
-      // The console restarting under the run (or the proxy in front of it): keep asking.
-      setConsoleDown(true);
+    } catch (err) {
+      // No answer, or the proxy's 502 while the console restarts under the run: keep asking.
+      if (err instanceof TypeError || (err instanceof ApiError && /^HTTP 5\d\d$/.test(err.message))) setConsoleDown(true);
       return;
     }
     setConsoleDown(false);
