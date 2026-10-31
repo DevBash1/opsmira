@@ -60,6 +60,7 @@ const server = spawn(process.execPath, ["server/src/index.js"], {
     OPENROUTER_BASE_URL: `http://127.0.0.1:${model.address().port}/v1`,
     OPENROUTER_MODEL: "test/model",
     OPSMIRA_UPDATE_CHECK: "off",
+    OPSMIRA_COMMIT: "test-build",
     OPSMIRA_ENV_FILE: join(tmpdir(), "opsmira-no-env"),
   },
 });
@@ -149,7 +150,11 @@ test("the owner sees an MCP client's ask while it runs, and follows it live to t
 });
 
 test("watching needs the owner's session, and closing it leaves the client's turn running", async () => {
-  assert.equal((await fetch(`${BASE}/api/live`)).status, 401);
+  const anonymous = await fetch(`${BASE}/api/live`);
+  assert.equal(anonymous.status, 401);
+  // A console page reloads onto a new build after a detached run updated it; the build is named to the owner only.
+  assert.equal(anonymous.headers.get("x-opsmira-build"), null);
+  assert.equal((await fetch(`${BASE}/api/live`, { headers: owner })).headers.get("x-opsmira-build"), "test-build");
   assert.equal((await fetch(`${BASE}/api/conversations/aaaaaaaa-bbbb/live`)).status, 401);
 
   const made = await fetch(`${BASE}/api/mcp/tokens`, { method: "POST", headers: { ...owner, "Content-Type": "application/json" }, body: JSON.stringify({ name: "Bot", access: "ask" }) }).then((r) => r.json());

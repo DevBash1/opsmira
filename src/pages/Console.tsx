@@ -27,6 +27,7 @@ import {
   api,
   ApiError,
   currentConversationId,
+  onNewBuild,
   resetConversation,
   setServerChoice,
   switchConversation,
@@ -38,6 +39,7 @@ import {
   type SurfaceInfo,
   type ChatEvent,
   type ConversationSummary,
+  type DetachedRun,
   type LiveTurn,
   type MemoryNote,
   type ModelInfo,
@@ -204,6 +206,21 @@ function applyEvent(turn: Turn, event: ChatEvent): Turn {
 const MODEL_STORAGE_KEY = "opsmira_model";
 const MODE_STORAGE_KEY = "opsmira_mode";
 const SERVER_STORAGE_KEY = "opsmira_server";
+// Kept across the reload onto a new build after a detached run: the composer's text, and the build reloaded for.
+const DRAFT_STORAGE_KEY = "opsmira_draft";
+const RELOADED_STORAGE_KEY = "opsmira_reloaded_for";
+
+/** A detached run still to report into its conversation. */
+const detachOpen = (r: DetachedRun) => r.status === "running" || r.delivered === false;
+
+/** The newest thing a detached run is doing: the command it runs, or what it says. */
+function detachStep(run: DetachedRun): string {
+  for (const e of [...run.last].reverse()) {
+    if (e.type === "run" && e.command) return `$ ${e.command}`;
+    if (e.type === "note" && e.text) return e.text;
+  }
+  return run.goal;
+}
 const DISCLAIMER: Record<AgentMode, string> = {
   ask: "You're in control. Server changes always need your approval.",
   full: "Full access is on. The agent runs commands, changes included, without asking.",
@@ -942,7 +959,20 @@ function ConsoleApp({
 }) {
   const [current, setCurrent] = useState<Turn | null>(null);
   const [historyReady, setHistoryReady] = useState(false);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(() => {
+    try {
+      return sessionStorage.getItem(DRAFT_STORAGE_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }, []);
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState("");
   const [audit, setAudit] = useState<AuditEntry[]>([]);
@@ -976,6 +1006,14 @@ function ConsoleApp({
   // What MCP clients are asking right now, and whether this tab is following one of them live.
   const [liveTurns, setLiveTurns] = useState<LiveTurn[]>([]);
   const [watching, setWatching] = useState(false);
+  // Detached runs (docs/detach.md) still to report back, followed in the background; whether the console stopped
+  // answering meanwhile (a run updating Opsmira restarts it); and a newer build that answered afterwards.
+  const [detachRuns, setDetachRuns] = useState<DetachedRun[]>([]);
+  const [detachFollow, setDetachFollow] = useState(false);
+  const [detachSeen, setDetachSeen] = useState(false);
+  const [detachKick, setDetachKick] = useState(0);
+  const [consoleDown, setConsoleDown] = useState(false);
+  const [newBuild, setNewBuild] = useState("");
   const [memories, setMemories] = useState<MemoryNote[] | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busyProposal, setBusyProposal] = useState<string | null>(null);
@@ -1013,6 +1051,7 @@ function ConsoleApp({
   const busyRef = useRef(false);
   const watchingRef = useRef(false);
   const watchAbort = useRef<AbortController | null>(null);
+  const detachKnown = useRef(new Set<string>());
   // Live conversations the owner left: not followed again on their own (the banner still offers them).
   const leftLive = useRef(new Set<string>());
   const streamAbort = useRef<AbortController | null>(null);
@@ -1148,6 +1187,46 @@ function ConsoleApp({
     const t = window.setInterval(read, 3000);
     return () => window.clearInterval(t);
   }, []);
+
+  /** Where detached runs stand. One that reported into this conversation puts its report on screen. */
+  const readDetached = useCallback(async () => {
+    let runs: DetachedRun[];
+    try {
+      runs = (await api.detached()).runs;
+    } catch {
+      // The console restarting under the run (or the proxy in front of it): keep asking.
+      setConsoleDown(true);
+      return;
+    }
+    setConsoleDown(false);
+    setDetachRuns(runs);
+    const open = new Set(runs.filter(detachOpen).map((r) => r.id));
+    const reported = runs.filter((r) => detachKnown.current.has(r.id) && !open.has(r.id));
+    // The owner's own turn holds the screen: show the report on the next look.
+    const later = sendingRef.current || busyRef.current;
+    detachKnown.current = new Set([...open, ...(later ? reported.map((r) => r.id) : [])]);
+    if (open.size) setDetachSeen(true);
+    setDetachFollow(detachKnown.current.size > 0);
+    if (!reported.length || later) return;
+    refreshAudit();
+    if (reported.some((r) => r.conversationId === currentConversationId())) await loadHistory();
+    else showHint(`The detached run on ${reported[0].server.replace(/^agent:/, "")} reported back. It's in History.`);
+  }, [loadHistory, refreshAudit, showHint]);
+
+  // Detached runs: looked up on load and when one is approved, then every few seconds until each has reported,
+  // in a background tab too, and at once when the tab comes back.
+  useEffect(() => {
+    readDetached();
+    if (!detachFollow) return;
+    const t = window.setInterval(readDetached, 4000);
+    const onVisible = () => document.visibilityState === "visible" && readDetached();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [readDetached, detachFollow, detachKick]);
+  useEffect(() => onNewBuild(setNewBuild), []);
 
   /** One top-bar sheet open at a time. History, Memory and Artifacts fetch fresh data each time they open. */
   const togglePanel = (panel: "scenes" | "audit" | "history" | "memory" | "artifacts" | "tasks") => {
@@ -1314,6 +1393,28 @@ function ConsoleApp({
   // which the owner can steer and stop like their own.
   const ownTurn = sending || !!busyProposal;
   const running = ownTurn || watching;
+
+  /** Load this page again from the console now answering. The conversation and mode stay (sessionStorage). */
+  const reloadOntoBuild = (force = false) => {
+    try {
+      // Once per build on its own: a console that still serves the old page should not cause a reload loop.
+      if (!force && sessionStorage.getItem(RELOADED_STORAGE_KEY) === newBuild) return;
+      sessionStorage.setItem(RELOADED_STORAGE_KEY, newBuild);
+      if (input) sessionStorage.setItem(DRAFT_STORAGE_KEY, input);
+    } catch {
+      if (!force) return;
+    }
+    window.location.reload();
+  };
+  // A new build answering after a detached run means Opsmira was updated under this page: reload onto it, unless
+  // the owner is in the middle of something (then the pill over the composer offers it).
+  const holdReload = running || input.trim().length > 0 || attachments.length > 0;
+  const reloadDue = !!newBuild && detachSeen;
+  useEffect(() => {
+    if (reloadDue && !holdReload) reloadOntoBuild();
+    // reloadOntoBuild reads the latest state; only these decide when.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadDue, holdReload]);
 
   const send = async (text: string, images: string[] = []) => {
     text = text.trim();
@@ -1515,6 +1616,7 @@ function ConsoleApp({
     setBusyProposal(id);
     try {
       const r = approve ? await api.approve(id, confirmText, model, mode) : await api.decline(id, model, mode);
+      if (r.proposal.kind === "detach" && approve) setDetachKick((n) => n + 1);
       for (const event of r.events ?? []) if (event.type === "steer") deliveredSteers.current.add(event.id);
       if (r.events?.some((e) => e.type === "stopped") && turnId) restoreDropped(turnId);
       setCurrent((t) => {
@@ -1772,6 +1874,10 @@ function ConsoleApp({
   // Client turns running in other conversations, newest first.
   const elsewhere = liveTurns.filter((t) => t.conversationId !== currentConversationId()).reverse();
   const elsewhereLive = elsewhere[0];
+  // A detached run going (this conversation's first), the console restarting under it, or its new build waiting.
+  const here = currentConversationId();
+  const detachNow = detachRuns.filter((r) => r.status === "running").sort((a, b) => Number(b.conversationId === here) - Number(a.conversationId === here))[0];
+  const detachPill = reloadDue && holdReload ? "updated" : consoleDown && detachSeen ? "restarting" : detachNow ? "running" : null;
   const previewMeta = preview ? surfaces?.find((x) => x.id === preview) : undefined;
 
   const stageKey = preview ? `p:${preview}` : !historyReady ? "loading" : (current?.id ?? "idle");
@@ -2216,6 +2322,54 @@ function ConsoleApp({
       </div>
 
       <div className="relative z-10 flex w-full shrink-0 flex-col items-center p-[12px_16px_20px_16px] sm:p-[12px_20px_24px_20px]">
+        {/* A detached run: what it does now, the console restarting under it, then the new build to reload onto. */}
+        <AnimatePresence initial={false}>
+          {detachPill && !preview && (
+            <motion.div key={detachPill} {...collapseY(reduce, { blur: true })} className="flex w-full max-w-[800px] justify-center">
+              <div className="max-w-full pb-[10px]">
+                {detachPill === "updated" ? (
+                  <button
+                    type="button"
+                    onClick={() => reloadOntoBuild(true)}
+                    title="Load the updated console. This conversation and your draft stay."
+                    className="glass flex max-w-full min-w-0 cursor-pointer flex-row items-center gap-[8px] rounded-full p-[6px_12px_6px_10px] text-[12px] transition-[background-color,scale] duration-200 ease-enter hover:bg-[var(--surface)] active:scale-[0.98] [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]"
+                  >
+                    <Icon name="refresh-cw" className="h-[11px] w-[11px] shrink-0 text-[var(--accent)]" />
+                    <span className="shrink-0 font-medium text-[var(--ink)]">Opsmira was updated</span>
+                    <span className="font-code shrink-0 text-[9.5px] tracking-[0.5px] text-[var(--accent-strong)]">RELOAD</span>
+                  </button>
+                ) : detachPill === "restarting" ? (
+                  <div role="status" className="glass flex max-w-full min-w-0 flex-row items-center gap-[8px] rounded-full p-[6px_12px_6px_10px] text-[12px] [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]">
+                    <Icon name="loader-circle" className="h-[11px] w-[11px] shrink-0 text-[var(--muted)] motion-safe:animate-spin" />
+                    <span className="shrink-0 font-medium text-[var(--ink)]">Opsmira is restarting</span>
+                    <span className="min-w-0 truncate text-[var(--muted)]">This page catches up when it's back</span>
+                  </div>
+                ) : (
+                  detachNow && (
+                    <button
+                      type="button"
+                      disabled={detachNow.conversationId === here || !detachNow.conversationId || ownTurn}
+                      onClick={() => detachNow.conversationId && openConversation(detachNow.conversationId)}
+                      title={detachNow.conversationId === here ? detachNow.goal : "Open the conversation that started it"}
+                      className="glass flex max-w-full min-w-0 cursor-pointer flex-row items-center gap-[8px] rounded-full p-[6px_12px_6px_10px] text-[12px] transition-[background-color,scale] duration-200 ease-enter enabled:hover:bg-[var(--surface)] enabled:active:scale-[0.98] disabled:cursor-default [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]"
+                    >
+                      <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-[var(--accent)] motion-safe:animate-[dot-pulse_1.4s_ease-in-out_infinite]" />
+                      <span className="shrink-0 font-medium text-[var(--ink)]">Detached on {detachNow.server.replace(/^agent:/, "")}</span>
+                      <span className="min-w-0 truncate text-[var(--muted)]">{detachStep(detachNow)}</span>
+                      {detachNow.conversationId !== here && detachNow.conversationId && (
+                        <span className="font-code flex shrink-0 flex-row items-center gap-[4px] text-[9.5px] tracking-[0.5px] text-[var(--accent-strong)]">
+                          <Icon name="arrow-up-right" className="h-[11px] w-[11px]" />
+                          OPEN
+                        </span>
+                      )}
+                    </button>
+                  )
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* An MCP client asking Opsmira something in another conversation: one tap follows it live. */}
         <AnimatePresence initial={false}>
           {elsewhereLive && !preview && (

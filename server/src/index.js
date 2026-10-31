@@ -28,7 +28,7 @@ import { appendAudit, deleteArtifact, listArtifacts, listConversations, readArti
 import { buildLastTurn, rewindLast } from "./history.js";
 import { startSampler } from "./metrics.js";
 import { knownHosts } from "./machine.js";
-import { checkForUpdate, updateStatus } from "./update.js";
+import { buildInfo, checkForUpdate, updateStatus } from "./update.js";
 import { listDetached, startDetached, tellDetached } from "./detach.js";
 import { MCP_PATH, createMcpToken, handleMcp, listMcpTokens, liveTurns, revokeMcpToken, watchTurn } from "./mcp.js";
 import { mountOAuth } from "./oauth.js";
@@ -98,6 +98,12 @@ app.get("/api/me", (req, res) => {
 });
 
 app.use("/api", requireAuth);
+// Which build answered. A console that watched a detached run reloads itself onto a new build (docs/detach.md).
+const BUILD_ID = buildInfo().commit || buildInfo().version;
+app.use("/api", (req, res, next) => {
+  res.set("X-Opsmira-Build", BUILD_ID);
+  next();
+});
 
 app.get("/api/history", (req, res) => {
   const { conversation, pendingApprovals } = getSession(req.sessionId, conversationIdFromRequest(req));

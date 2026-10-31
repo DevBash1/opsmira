@@ -25,6 +25,11 @@ let runs = (() => {
   }
 })();
 
+// A report that had not reached its conversation when the console last stopped.
+setTimeout(() => {
+  for (const run of runs) if (run.report && run.delivered === false) deliver(run);
+}, 1000).unref();
+
 function save() {
   runs = runs.slice(-KEEP_RUNS);
   const tmp = `${FILE}.tmp`;
@@ -76,7 +81,7 @@ export async function startDetached(proposal, conversationId, { console: console
   };
   const r = await callAgent(agentByName(name).id, "detach", { spec, key: env.openrouterApiKey, runner: runner() }, 30_000);
   if (!r.ok) return { exitCode: null, output: `not started: ${r.stderr || r.output || "the agent did not answer"}`, durationMs: Date.now() - started };
-  runs.push({ id, conversationId: conversationId ?? null, server: proposal.server, goal: d.goal, status: "running", startedAt: spec.createdAt, deadline: spec.deadline, entries: [], audited: [], report: null });
+  runs.push({ id, conversationId: conversationId ?? null, server: proposal.server, goal: d.goal, status: "running", startedAt: spec.createdAt, deadline: spec.deadline, entries: [], audited: [], report: null, delivered: false });
   save();
   return {
     exitCode: 0,
@@ -90,7 +95,8 @@ export function listDetached() {
   return runs
     .slice()
     .reverse()
-    .map(({ audited, entries, ...r }) => ({ ...r, last: entries.slice(-12) }));
+    // Without command output (it is in Activity): the console asks for this every few seconds while a run goes.
+    .map(({ audited, entries, ...r }) => ({ ...r, last: entries.slice(-12).map(({ output, ...e }) => e) }));
 }
 
 const clip = (text, n) => (typeof text === "string" ? (text.length > n ? `${text.slice(0, n)}\n…[truncated]` : text) : "");
@@ -135,6 +141,7 @@ function onReport(server, id, report) {
   const summary = clip(typeof report?.summary === "string" ? report.summary : "(no summary)", 8000);
   run.report = { status, summary, steps: Number(report?.steps) || 0, commands: Number(report?.commands) || 0, at: report?.at ?? new Date().toISOString() };
   run.status = status;
+  if (!run.conversationId) run.delivered = true;
   save();
   if (run.conversationId) deliver(run);
   return true;
@@ -156,6 +163,9 @@ function deliver(run, tries = 0) {
   });
   session.conversation.push({ role: "assistant", content: `**The detached run on ${name} ${label}.**\n\n${r.summary}` });
   persistSession(session);
+  // The console following the run shows the report once this is set.
+  run.delivered = true;
+  save();
 }
 
 onAgentEvent((server, msg, reply) => {

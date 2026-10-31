@@ -150,6 +150,20 @@ export interface LiveTurn {
   startedAt: string;
 }
 
+/** A job handed to a server to run on its own (docs/detach.md), with its last log entries (no command output). */
+export interface DetachedRun {
+  id: string;
+  conversationId: string | null;
+  server: string;
+  goal: string;
+  status: "running" | "done" | "failed" | "stopped" | "timeout" | "budget";
+  startedAt: string;
+  deadline: string;
+  last: { t?: string; type: string; text?: string; command?: string; n?: number }[];
+  /** Its report is in the conversation that started it. */
+  delivered?: boolean;
+}
+
 /** Following a running MCP turn: what it has done so far, then each event as it happens. */
 export type WatchEvent = ChatEvent | { type: "snapshot"; ask: string; client: string; model: string; startedAt: string; events: ChatEvent[] };
 
@@ -206,7 +220,28 @@ async function fail(res: Response, fallback: string): Promise<never> {
   throw new ApiError(body?.error || fallback, body?.code);
 }
 
+// The build that answers each request. The first one seen is the build this page came with.
+let pageBuild: string | null = null;
+let lastBuild: string | null = null;
+let buildListener: ((build: string) => void) | null = null;
+function noteBuild(res: Response) {
+  const build = res.headers.get("X-Opsmira-Build");
+  if (!build) return;
+  pageBuild ??= build;
+  // Twice in a row: while a rollout restarts it, the old and the new console can answer by turns.
+  if (build !== pageBuild && build === lastBuild) buildListener?.(build);
+  lastBuild = build;
+}
+/** Called when a different build of the console answers than the one this page came with. */
+export function onNewBuild(listener: (build: string) => void) {
+  buildListener = listener;
+  return () => {
+    if (buildListener === listener) buildListener = null;
+  };
+}
+
 async function json<T>(res: Response): Promise<T> {
+  noteBuild(res);
   if (!res.ok) await fail(res, `HTTP ${res.status}`);
   return res.json();
 }
@@ -300,6 +335,7 @@ export const api = {
   conversations: () =>
     fetch("/api/conversations", { headers: headers() }).then((r) => json<{ conversations: ConversationSummary[]; current: string | null }>(r)),
   live: () => fetch("/api/live", { headers: headers() }).then((r) => json<{ turns: LiveTurn[] }>(r)),
+  detached: () => fetch("/api/detached").then((r) => json<{ runs: DetachedRun[] }>(r)),
   /** Follow a running MCP turn until it ends. Throws ApiError 404 when nothing is running there. */
   async watch(id: string, onEvent: (e: WatchEvent) => void, signal?: AbortSignal) {
     const res = await fetch(`/api/conversations/${encodeURIComponent(id)}/live`, { headers: headers(), signal });

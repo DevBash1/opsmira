@@ -27,7 +27,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Detach mode: for changes that take the console down while they run, the AI hands the job to a connected server
   that runs it on its own with the model, logs every step, and reports back into the chat. An `opsmira` command on
   that server follows the run and talks to it (`opsmira watch`, `say`, `stop`). Always approved first; every
-  command lands in Activity. See docs/detach.md.
+  command lands in Activity. The console follows the run in the background (a pill shows what it is doing, and
+  that the console is restarting), shows the report the moment it is back, and reloads itself onto the new build
+  when the run updated Opsmira (or offers Reload while you are typing). See docs/detach.md.
 - Command mode: start a message with ! to run a command yourself on the selected server (`!df -h`). It runs as typed,
   shows in the chat like any command, and the agent then answers with the command and its output in front of it.
 - Rows, stats and key-value lines in the agent's views and in the live surfaces are clickable: a click asks the

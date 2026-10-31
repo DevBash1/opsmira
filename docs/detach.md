@@ -32,6 +32,16 @@ started by the agent, so it runs as the agent's account, with whatever `sudo` th
    the run and answers `{ type: "detach-ack", id }`. Then the agent removes the `opsmira` command, and deletes the
    run directory after a grace period (24 h), so the owner can still read the log on the server.
 
+## In the console
+
+Until a run has reported back, the console checks on it every few seconds, in a background tab too. A pill over
+the message box shows what the run is doing, and "Opsmira is restarting" while the console does not answer. The
+report appears in the conversation as soon as it arrives (`GET /api/detached` marks a run `delivered` once it is
+there). Every signed-in API answer names the build that gave it (`X-Opsmira-Build`). When a different build answers
+after a run (twice in a row, so a rollout's old and new pods answering by turns cannot trigger it), the page reloads
+itself onto it, at most once per build, and keeps the conversation. If you are typing or a turn is running, it waits
+and the pill offers **Reload** instead, which keeps your draft.
+
 ## The run directory
 
 `<agent state dir>/detached/<id>/`, mode 0700, owned by the agent's account.

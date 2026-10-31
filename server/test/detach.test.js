@@ -87,9 +87,13 @@ test("a detached run reports back: audit, conversation, and the opsmira command 
   assert.match(started.output, /watch/);
   assert.ok(existsSync(cli), "the opsmira command is installed while the run is open");
 
+  assert.equal(detach.listDetached().find((r) => r.id === started.detachedRun).delivered, false, "a console following the run waits for its report");
   const run = await until(() => detach.listDetached().find((r) => r.id === started.detachedRun && r.report));
   assert.equal(run.report.status, "done");
   assert.match(run.report.summary, /nothing else to do/);
+  assert.equal(run.delivered, true, "the report is in the conversation");
+  assert.ok(run.last.some((e) => e.type === "result" && e.exitCode === 0), "the listing has the command's result");
+  assert.ok(run.last.every((e) => !("output" in e)), "but not its output, which is in Activity");
 
   const audited = readAudit().filter((e) => e.by === "detached" && e.detachedRun === run.id);
   assert.equal(audited.length, 1);
