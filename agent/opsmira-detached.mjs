@@ -34,7 +34,7 @@ import { pathToFileURL } from "node:url";
 const DEFAULT_MAX_STEPS = 40;
 const DEFAULT_MINUTES = 30;
 const RUN_TIMEOUT_DEFAULT = 120; // seconds
-const RUN_TIMEOUT_MAX = 600;
+const RUN_TIMEOUT_MAX = 3600; // an hour: upgrades, builds and pulls can take long
 const MODEL_OUTPUT_CAP = 64 * 1024;
 const LOG_OUTPUT_CAP = 16 * 1024;
 const NOTE_CAP = 4000;

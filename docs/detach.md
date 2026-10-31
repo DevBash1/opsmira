@@ -71,7 +71,7 @@ Every entry has `t` (ISO time) and `type`:
 The model is called with the OpenAI-compatible chat completions API (`baseUrl` + `/chat/completions`, the key
 as a Bearer token), with three tools:
 
-- `run { command, why, timeout? }`: runs `/bin/sh -c command` (timeout default 120 s, at most 600 s; output capped
+- `run { command, why, timeout? }`: runs `/bin/sh -c command` (timeout default 120 s, at most 3600 s; output capped
   at 64 KB for the model). One at a time.
 - `say { text }`: tells the owner something (goes to the log, so `opsmira watch` and the console show it).
 - `done { status: "done" | "failed", summary }`: ends the run. The summary is the report the owner reads.

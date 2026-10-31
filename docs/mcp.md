@@ -55,7 +55,8 @@ can follow them and approve what they propose.
 - **`opsmira_read_surface`** `{ surface, server?, target? }`: live data from a server (memory, disks, processes,
   logs, services, containers, certificates...), as JSON. Works on read-only servers.
 - **`opsmira_run_command`** `{ command, server? }`: one shell command on a server, straight there, without Opsmira's
-  agent: exit code and output (30 second limit).
+  agent: exit code and output. It may run 2 minutes when read-only and 15 otherwise; `timeout_seconds` asks for
+  more, up to an hour. Long calls stream a keep-alive, so proxies such as Cloudflare do not cut them.
 - **`opsmira_ask`** `{ message, conversation_id?, server?, wait_seconds? }`: a message to Opsmira's agent, as you would
   type it in the console. It investigates, answers, and returns its reply, the commands it ran, and any change
   waiting for your approval. It waits up to `wait_seconds` (default 50, at most 90, under what proxies such as

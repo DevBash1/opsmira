@@ -172,6 +172,9 @@ All settings are environment variables; see [`.env.example`](../.env.example). T
 | `OPSMIRA_TRUST_PROXY` | off | Behind an HTTPS proxy |
 | `OPSMIRA_SITE` | off | Also serve the marketing pages |
 | `OPSMIRA_MAX_ROUNDS` | `30` | Model calls per request |
+| `OPSMIRA_INSPECT_TIMEOUT` | `120` | Seconds a read-only command may run (the AI runs these without asking) |
+| `OPSMIRA_COMMAND_TIMEOUT` | `900` | Seconds a change may run: approved, Full access, or typed with `!` |
+| `OPSMIRA_MAX_COMMAND_TIMEOUT` | `3600` | The most the AI may ask for one command (upgrades, builds, image pulls) |
 
 ## Data, backups, upgrades
 

@@ -1,19 +1,20 @@
 // What happens when a task wakes the agent: its own conversation gets a message saying why, one model turn
 // runs, and anything that needs approval waits there (the owner opens the task's chat to decide).
-import { classifyInspect, runCommand } from "./exec.js";
+import { classifyInspect, commandTimeout, runCommand } from "./exec.js";
 import { conversationIdOf, noteRun } from "./tasks.js";
 import { getSession, persistSession } from "./state.js";
 import { runTurn } from "./ai.js";
 import { contentText } from "./content.js";
 
-const TURN_TIMEOUT_MS = 5 * 60_000;
+// Long enough for a change with the default command limit (15 minutes) and what comes after it.
+const TURN_TIMEOUT_MS = 30 * 60_000;
 const KEEP_TURNS = 3;
 
 /** Run a trigger's check command. It was read-only when it was made; it is checked again here, every time. */
 export async function runCheck(task) {
   const verdict = classifyInspect(task.check);
   if (!verdict.ok) return { exitCode: null, output: `the check is no longer allowed: ${verdict.reason}` };
-  const r = await runCommand(task.check, { server: task.server || undefined });
+  const r = await runCommand(task.check, { server: task.server || undefined, timeoutMs: commandTimeout("inspect") });
   return { exitCode: r.exitCode ?? null, output: r.output };
 }
 
@@ -71,7 +72,7 @@ async function wake(task, why) {
       server: task.server || "local",
     });
   } catch (err) {
-    error = abort.signal.aborted ? "stopped: it ran longer than 5 minutes" : String(err?.message ?? err).slice(0, 200);
+    error = abort.signal.aborted ? "stopped: it ran longer than 30 minutes" : String(err?.message ?? err).slice(0, 200);
   } finally {
     clearTimeout(timeout);
     session.run = null;

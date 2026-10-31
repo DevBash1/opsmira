@@ -22,7 +22,7 @@ import { fireTask, runCheck, waitingFor } from "./taskrun.js";
 import { defaultFor, ownerCommand, pickServer, runOwnerCommand, runTurn } from "./ai.js";
 import { getModels, getModelInfo } from "./models.js";
 import { contentImages, contentText, parseUserInput, userContent } from "./content.js";
-import { runCommand } from "./exec.js";
+import { commandTimeout, runCommand } from "./exec.js";
 import { getSession, deleteSession, persistSession, removeConversation } from "./state.js";
 import { appendAudit, deleteArtifact, listArtifacts, listConversations, readArtifact, readAudit, readMemory, removeMemory } from "./store.js";
 import { buildLastTurn, rewindLast } from "./history.js";
@@ -516,7 +516,7 @@ app.post("/api/approve", async (req, res) => {
   try {
     // No abort signal: Stop never kills a change the owner approved halfway through. A detached run is started
     // on its server instead (it then runs there on its own and reports back).
-    const result = proposal.kind === "detach" ? await startDetached(proposal, session.id, { console: `${req.protocol}://${req.get("host")}` }) : await runCommand(proposal.command, { server: proposal.server });
+    const result = proposal.kind === "detach" ? await startDetached(proposal, session.id, { console: `${req.protocol}://${req.get("host")}` }) : await runCommand(proposal.command, { server: proposal.server, timeoutMs: commandTimeout("act", proposal.timeoutSeconds) });
     proposal.status = "approved";
     proposal.result = result;
     audit = appendAudit({ id: randomUUID(), kind: "act", approvalId: id, command: proposal.command, title: proposal.title, ...(proposal.server ? { server: proposal.server } : {}), ...result });

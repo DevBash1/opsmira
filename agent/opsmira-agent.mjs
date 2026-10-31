@@ -136,7 +136,8 @@ let shellCwd = os.homedir();
 /** Run a command line the way the console's own shell runs would, and keep it killable. */
 export function runShell(command, { timeout = 30000, onChild } = {}) {
   return new Promise((resolve) => {
-    const limit = Math.min(Math.max(Number(timeout) || 30000, 1000), 120000);
+    // The console decides how long a command may run (minutes for upgrades and builds); this only bounds it.
+    const limit = Math.min(Math.max(Number(timeout) || 30000, 1000), 6 * 60 * 60_000);
     const started = Date.now();
     let child;
     try {

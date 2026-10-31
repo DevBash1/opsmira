@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { randomUUID } from "crypto";
 import { env } from "./env.js";
-import { classifyInspect, runCommand } from "./exec.js";
+import { classifyInspect, COMMAND_TIMEOUTS, commandTimeout, runCommand } from "./exec.js";
 import { AGENT_PREFIX, agentAccess, agentOs, listAgents } from "./agents.js";
 import { appendAudit } from "./store.js";
 import { deriveScene } from "./views.js";
@@ -152,6 +152,11 @@ const SURFACE_TOOL = {
   },
 };
 
+/** The per-command time limit the model can set: the default, and how far it can go. */
+const TIMEOUT_PARAM = (kind) =>
+  `Optional. Seconds this command may run before it is killed: default ${Math.round(commandTimeout(kind) / 1000)}, at most ${Math.round(COMMAND_TIMEOUTS.max / 1000)}. ` +
+  (kind === "inspect" ? "Read-only looks rarely need more." : "Ask for more for long jobs such as upgrades, builds, image pulls and big copies.");
+
 const SERVER_PARAM =
   "Optional. A connected server to run this on, as shown in your prompt (for example agent:web-1). Leave it out to use the server the owner has selected, which your prompt names. \"local\" is the machine (or container) Opsmira itself runs on.";
 
@@ -214,7 +219,7 @@ export async function runOwnerCommand(command, conversation, onEvent, { signal, 
     onEvent({ type: "tool_call", tool: "inspect", command, server: target.server, rejected: target.error });
   } else {
     onEvent({ type: "tool_call", tool: "inspect", command, server: target.server });
-    const run = await runCommand(command, { signal, server: target.server });
+    const run = await runCommand(command, { signal, server: target.server, timeoutMs: commandTimeout("act") });
     if (run.stopped) {
       onEvent({ type: "tool_result", tool: "inspect", command, server: target.server, ...run });
       result = { error: "stopped by the owner" };
@@ -299,6 +304,7 @@ const TOOLS = [
         properties: {
           command: { type: "string", description: "The shell command to run." },
           server: { type: "string", description: SERVER_PARAM },
+          timeout_seconds: { type: "number", description: TIMEOUT_PARAM("inspect") },
         },
         required: ["command"],
       },
@@ -318,6 +324,7 @@ const TOOLS = [
           context: { type: "string", description: "Plain-language explanation of what this does and why." },
           riskLevel: { type: "string", enum: ["Low", "Medium", "High"] },
           riskDetail: { type: "string", description: "What could go wrong, in one line." },
+          timeout_seconds: { type: "number", description: TIMEOUT_PARAM("act") },
           confirmPhrase: {
             type: "string",
             description:
@@ -776,7 +783,8 @@ export async function runTurn(
             onEvent({ type: "tool_call", tool: "inspect", command, server: target.server, rejected: check.reason });
           } else {
             onEvent({ type: "tool_call", tool: "inspect", command, server: target.server });
-            const run = await runCommand(command, { signal, server: target.server });
+            // A read-only look gets a few minutes; with Full access a "look" may be anything, so it gets the longer limit.
+            const run = await runCommand(command, { signal, server: target.server, timeoutMs: commandTimeout(check.ok && !fullAccess ? "inspect" : "act", parsed.timeout_seconds) });
             if (run.stopped) {
               // Killed by Stop: not a real result, so it isn't audited or shown as one.
               onEvent({ type: "tool_result", tool: "inspect", command, server: target.server, ...run });
@@ -956,7 +964,7 @@ export async function runTurn(
           // Pre-authorised by the owner's mode: runs now, no card. Stop ends it like Ctrl-C would, so the
           // owner is never stuck waiting on a command they chose to cancel.
           onEvent({ type: "tool_call", tool: "act", command, server: target.server, title: parsed.title });
-          const run = await runCommand(command, { signal, server: target.server });
+          const run = await runCommand(command, { signal, server: target.server, timeoutMs: commandTimeout("act", parsed.timeout_seconds) });
           appendAudit({ id: randomUUID(), kind: "act", auto: true, command, title: parsed.title, ...(target.server ? { server: target.server } : {}), ...run });
           onEvent({ type: "tool_result", tool: "act", command, server: target.server, ...run });
           if (run.stopped) {
@@ -980,6 +988,7 @@ export async function runTurn(
             context: typeof parsed.context === "string" ? noDashes(parsed.context) : "",
             riskLevel: ["Low", "Medium", "High"].includes(parsed.riskLevel) ? parsed.riskLevel : "Medium",
             riskDetail: typeof parsed.riskDetail === "string" ? noDashes(parsed.riskDetail) : "",
+            ...(Number(parsed.timeout_seconds) > 0 ? { timeoutSeconds: Math.round(Number(parsed.timeout_seconds)) } : {}),
             confirmPhrase:
               typeof parsed.confirmPhrase === "string" && parsed.confirmPhrase.trim() ? parsed.confirmPhrase.trim() : undefined,
             status: "pending",

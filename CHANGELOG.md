@@ -40,6 +40,15 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Hosted platforms (Heroku, Railway, Pxxl...): a credential for the app's environment and `--exec`, which runs the
   app under the agent so every deploy reconnects as the same server and its output can be read.
 
+### Changed
+- Commands may run much longer: 2 minutes for read-only looks, 15 minutes for changes (approved, Full access, or
+  typed with `!`), and the AI can ask for up to an hour on one command for upgrades, builds and image pulls. They
+  used to be killed after 30 seconds. All three are settings (`OPSMIRA_INSPECT_TIMEOUT`, `OPSMIRA_COMMAND_TIMEOUT`,
+  `OPSMIRA_MAX_COMMAND_TIMEOUT`). Agents before this version still stop commands at 2 minutes until they update.
+- The approval page for MCP sign-in shows Opsmira's mark and the connecting app's icon, what it will be able to do,
+  and a loading state on the button pressed. The MCP server declares its icon (serverInfo.icons) for clients that
+  show one.
+
 ### Fixed
 - Accepting a server that asked to join could loop (Accept, it vanishes, it asks again) for agents from before join
   requests: they do not keep the request's secret and came back as a new request. A server still waiting is now

@@ -116,7 +116,8 @@ test("an agent running other code than the console ships updates itself, and kee
   const { token } = agents.createPairingToken();
   // OPSMIRA_SUPERVISED: behave as under the installer's systemd service, which restarts the service after the agent exits to update.
   const first = startAgent(["--token", token, "--name", "updater"], { file: old, env: { OPSMIRA_SUPERVISED: "test" } });
-  const before = await until(() => agents.listAgents().find((x) => x.name === "updater" && x.online));
+  // Two starts of node, a download and a test run: slower on a busy CI machine than the default wait allows.
+  const before = await until(() => agents.listAgents().find((x) => x.name === "updater" && x.online), 25000);
   assert.equal(before.current, false);
   assert.equal(await first.exited, 0);
   assert.match(first.output(), /updated to .*restarting/);
@@ -126,7 +127,7 @@ test("an agent running other code than the console ships updates itself, and kee
 
   // "systemd" starts the installed (old) file again: it runs the update instead.
   startAgent([], { file: old, state: first.state, env: { OPSMIRA_SUPERVISED: "test" } });
-  const after = await until(() => agents.listAgents().find((x) => x.id === before.id && x.online && x.current));
+  const after = await until(() => agents.listAgents().find((x) => x.id === before.id && x.online && x.current), 25000);
   assert.equal(after.version, JSON.parse(readFileSync(first.state, "utf8")).update.version);
   assert.equal(JSON.parse(readFileSync(first.state, "utf8")).update.ok, true);
 });

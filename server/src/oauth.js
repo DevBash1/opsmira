@@ -8,7 +8,7 @@
 // A grant shows in the console's list of MCP connections and is revoked there like a token.
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { lookup } from "dns/promises";
-import { readFileSync, renameSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { isIP } from "net";
 import { join } from "path";
 import express from "express";
@@ -94,6 +94,7 @@ function register(req, res) {
     client_id: `opsmira_client_${randomBytes(16).toString("base64url")}`,
     client_name: typeof body.client_name === "string" && body.client_name.trim() ? body.client_name.trim().slice(0, 60) : "MCP client",
     redirect_uris: redirects,
+    ...httpsUrls({ logo_uri: body.logo_uri, client_uri: body.client_uri }),
     createdAt: new Date().toISOString(),
     lastUsedAt: null,
   };
@@ -130,14 +131,82 @@ function privateAddress(addr) {
   if (v6.startsWith("::ffff:")) return privateAddress(v6.slice(7));
   return v6 === "::1" || v6 === "::" || v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80");
 }
+/** Only https URLs survive (a client's logo and home page are shown to the owner, so nothing else is fetched). */
+function httpsUrls(fields) {
+  const out = {};
+  for (const [k, v] of Object.entries(fields)) {
+    try {
+      if (typeof v === "string" && new URL(v).protocol === "https:") out[k] = v.slice(0, 500);
+    } catch {
+      // not a URL
+    }
+  }
+  return out;
+}
+
+/** The same guard as for metadata documents: public https hosts only. Throws otherwise. */
+async function publicHttps(url) {
+  const u = new URL(url);
+  if (CIMD_ALLOW_LOCAL) return u;
+  if (u.protocol !== "https:" || (u.port && u.port !== "443") || u.username || u.password) throw new Error("not a plain https URL");
+  const addrs = await lookup(u.hostname, { all: true });
+  if (!addrs.length || addrs.some((a) => privateAddress(a.address))) throw new Error("points into a private network");
+  return u;
+}
+
+/* The connecting app's icon for the approval page: its logo_uri, else the icon its own site serves. Fetched here
+   and inlined (the page loads nothing from elsewhere), small images only, cached for a day. */
+const iconCache = new Map();
+const ICON_MAX_BYTES = 200 * 1024;
+async function clientIcon(client) {
+  const candidates = [];
+  if (client.logo_uri) candidates.push(client.logo_uri);
+  const site = client.client_uri ?? (client.metadataHost ? `https://${client.metadataHost}` : null);
+  if (site) for (const path of ["/apple-touch-icon.png", "/favicon.svg", "/favicon.ico"]) candidates.push(new URL(path, site).toString());
+  const key = candidates.join(" ");
+  if (!key) return null;
+  const hit = iconCache.get(key);
+  if (hit && Date.now() - hit.at < 24 * CIMD_CACHE_MS) return hit.icon;
+  let icon = null;
+  for (const url of candidates) {
+    try {
+      const u = await publicHttps(url);
+      const res = await fetch(u, { redirect: "error", signal: AbortSignal.timeout(4000) });
+      const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+      if (!res.ok || !/^image\/(png|jpeg|webp|gif|svg\+xml|x-icon|vnd\.microsoft\.icon)$/.test(type)) continue;
+      const bytes = Buffer.from(await res.arrayBuffer());
+      if (!bytes.length || bytes.length > ICON_MAX_BYTES) continue;
+      icon = `data:${type};base64,${bytes.toString("base64")}`;
+      break;
+    } catch {
+      // try the next one
+    }
+  }
+  iconCache.set(key, { icon, at: Date.now() });
+  return icon;
+}
+
+/** Opsmira's own mark, drawn inline. */
+const OPSMIRA_MARK = (() => {
+  for (const file of [join(env.webDir, "favicon.svg"), join(env.agentDir, "..", "public", "favicon.svg")]) {
+    try {
+      // drop the fixed size from the outer <svg> only, so it fills its box (the shapes inside keep theirs)
+      if (existsSync(file)) return readFileSync(file, "utf8").replace(/<\?xml[^>]*>/, "").replace(/<svg\b[^>]*>/, (tag) => tag.replace(/\s(width|height)="\d+"/g, ""));
+    } catch {
+      // next
+    }
+  }
+  return "";
+})();
+
 async function metadataClient(clientId) {
   const hit = cimdCache.get(clientId);
   if (hit && Date.now() - hit.at < CIMD_CACHE_MS) return hit.client;
-  const u = new URL(clientId);
-  if (!CIMD_ALLOW_LOCAL) {
-    if (u.protocol !== "https:" || (u.port && u.port !== "443") || u.username || u.password) throw new Error("the client_id URL must be plain https");
-    const addrs = await lookup(u.hostname, { all: true });
-    if (!addrs.length || addrs.some((a) => privateAddress(a.address))) throw new Error("the client_id URL points into a private network");
+  let u;
+  try {
+    u = await publicHttps(clientId);
+  } catch (err) {
+    throw new Error(`the client_id URL ${err.message}`);
   }
   const res = await fetch(u, { redirect: "error", signal: AbortSignal.timeout(5000), headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`the client_id URL answered ${res.status}`);
@@ -147,7 +216,7 @@ async function metadataClient(clientId) {
   if (doc.client_id !== clientId) throw new Error("the client metadata document names a different client_id");
   const redirects = Array.isArray(doc.redirect_uris) ? doc.redirect_uris.filter((r) => typeof r === "string" && acceptableRedirect(r)) : [];
   if (!redirects.length) throw new Error("the client metadata document lists no usable redirect_uris");
-  const client = { client_id: clientId, client_name: typeof doc.client_name === "string" ? doc.client_name.slice(0, 60) : u.hostname, redirect_uris: redirects, metadataHost: u.hostname };
+  const client = { client_id: clientId, client_name: typeof doc.client_name === "string" ? doc.client_name.slice(0, 60) : u.hostname, redirect_uris: redirects, metadataHost: u.hostname, ...httpsUrls({ logo_uri: doc.logo_uri, client_uri: doc.client_uri }) };
   cimdCache.set(clientId, { client, at: Date.now() });
   return client;
 }
@@ -212,61 +281,135 @@ function sameResource(asked, req) {
   }
 }
 
+const ICONS = {
+  eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  terminal: '<path d="m5 7 5 5-5 5"/><path d="M12 19h7"/>',
+  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+  back: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/>',
+  shield: '<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6l-8-3z"/>',
+  alert: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+};
+const icon = (name) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+
 function page(res, status, title, body) {
+  const nonce = randomBytes(16).toString("base64");
   res.status(status);
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'");
+  // Inline only: the page's own styles, its one script (by nonce), and images it carries as data: URIs.
+  res.setHeader("Content-Security-Policy", `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src data:; frame-ancestors 'none'; base-uri 'none'`);
   // Nothing to other sites (the return address is one); "no-referrer" would make the browser send Origin: null on
   // this page's own form, which the cross-site check then refuses.
   res.setHeader("Referrer-Policy", "same-origin");
-  res.send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · Opsmira</title><style>
-:root{--bg:#f4f6f5;--card:#fff;--ink:#16201c;--muted:#5d6b65;--line:#dfe5e2;--accent:#2f8f63;--warn:#9a6a12;--warnbg:#fbf4e4}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1412;--card:#161d1a;--ink:#e8eeeb;--muted:#93a29b;--line:#26302c;--accent:#5fbf8c;--warn:#e0b25a;--warnbg:#2a2416}}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px}
-.card{width:100%;max-width:460px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px}
-h1{font-size:22px;line-height:1.25;margin:0 0 10px}p{margin:0 0 12px;color:var(--muted)}b{color:var(--ink)}
-.mark{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:18px;color:var(--accent)}
-.dest{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:14px 0;font-size:14px}.dest code{font-size:15px;color:var(--ink)}
-.warn{background:var(--warnbg);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:13.5px;margin:0 0 14px}
-label.opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;cursor:pointer}
-label.opt span{display:block;font-size:13px;color:var(--muted)}input[type=radio]{margin-top:4px}
-.field{display:block;margin:10px 0}.field input{display:block;width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
-.row{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}button{font:inherit;border-radius:10px;padding:9px 16px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}.err{color:#c0392b;font-size:14px}
-</style></head><body><main class="card"><div class="mark">◉ Opsmira</div>${body}</main></body></html>`);
+  res.send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${esc(title)} · Opsmira</title><style>
+:root{--bg:#f3f6f4;--card:#ffffff;--ink:#15201b;--muted:#5b6a63;--soft:#eef3f0;--line:#dde5e1;--accent:#2f8f63;--accent-ink:#ffffff;--ring:rgba(47,143,99,.18);--warn:#8a5d0b;--warnbg:#fbf3e1;--danger:#b8402f;--shadow:0 1px 2px rgba(16,32,24,.06),0 12px 32px rgba(16,32,24,.08)}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1210;--card:#141b18;--ink:#e7eeea;--muted:#92a39b;--soft:#1a2320;--line:#25302b;--accent:#5fbf8c;--accent-ink:#0b1310;--ring:rgba(95,191,140,.2);--warn:#e2b45c;--warnbg:#2a2316;--danger:#ef8a7a;--shadow:0 1px 2px rgba(0,0,0,.4),0 16px 40px rgba(0,0,0,.35)}}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;display:grid;place-items:center;background:radial-gradient(1200px 600px at 50% -10%,var(--ring),transparent 60%),var(--bg);color:var(--ink);font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px 16px;-webkit-font-smoothing:antialiased}
+.card{width:100%;max-width:440px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:28px 26px 22px;box-shadow:var(--shadow);animation:rise .35s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.card{animation:none}}
+.pair{display:flex;align-items:center;justify-content:center;gap:14px;margin:2px 0 18px}
+.logo{width:52px;height:52px;border-radius:14px;overflow:hidden;display:grid;place-items:center;flex:none;box-shadow:0 0 0 1px var(--line)}
+.logo svg,.logo img{width:100%;height:100%;display:block;object-fit:cover}
+.logo.mono{background:var(--soft);font-weight:700;font-size:22px;color:var(--ink)}
+.link{display:flex;gap:5px}.link i{width:5px;height:5px;border-radius:50%;background:var(--line)}.link i:nth-child(2){background:var(--accent)}
+h1{font-size:20px;line-height:1.3;margin:0 0 4px;text-align:center;letter-spacing:-.01em}
+.sub{margin:0 0 18px;text-align:center;color:var(--muted);font-size:13.5px}.sub b{color:var(--ink);font-weight:600}
+.facts{list-style:none;margin:0 0 16px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--soft);display:grid;gap:8px}
+.facts li{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--muted)}.facts b{color:var(--ink);font-weight:600}
+.ic{width:17px;height:17px;flex:none;margin-top:1px;color:var(--accent)}
+.warn{display:flex;gap:10px;background:var(--warnbg);color:var(--warn);border-radius:12px;padding:10px 12px;font-size:13px;margin:0 0 14px}.warn .ic{color:var(--warn)}
+.label{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:2px 0 8px}
+.opt{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:0 0 8px;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s}
+.opt:hover{border-color:color-mix(in oklab,var(--accent) 45%,var(--line))}
+.opt:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 3px var(--ring);background:color-mix(in oklab,var(--accent) 5%,var(--card))}
+.opt input{margin:3px 0 0;accent-color:var(--accent);width:16px;height:16px;flex:none}
+.opt b{display:block;font-weight:600}.opt span{display:block;font-size:13px;color:var(--muted);margin-top:1px}
+.field{display:block;margin:0 0 12px;font-size:13px;font-weight:600}
+.field input{display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;font-weight:400;outline:none;transition:border-color .15s,box-shadow .15s}
+.field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}.row.one{grid-template-columns:1fr}
+button{font:inherit;font-weight:600;border-radius:12px;padding:11px 16px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;transition:transform .12s,background .15s,opacity .15s}
+button:hover{background:var(--soft)}button:active{transform:scale(.98)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}button.primary:hover{background:color-mix(in oklab,var(--accent) 88%,#000)}
+button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring)}
+button[disabled]{cursor:default;opacity:.6}button.busy{opacity:1}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{display:flex;gap:8px;color:var(--danger);font-size:13.5px;margin:0 0 12px}.err .ic{color:var(--danger)}
+.foot{margin:16px 0 0;text-align:center;font-size:12px;color:var(--muted)}
+</style></head><body><main class="card">${body}</main>
+<script nonce="${nonce}">
+// One answer per page: the pressed button shows it is working, and nothing can be sent twice. The pressed button's
+// value travels in a hidden field, because a disabled button is left out of the form.
+document.querySelectorAll("form").forEach(function (form) {
+  form.addEventListener("submit", function (event) {
+    if (form.dataset.sent) { event.preventDefault(); return; }
+    form.dataset.sent = "1";
+    var pressed = event.submitter;
+    if (pressed && pressed.name) {
+      var keep = document.createElement("input");
+      keep.type = "hidden"; keep.name = pressed.name; keep.value = pressed.value;
+      form.appendChild(keep);
+    }
+    form.querySelectorAll("button").forEach(function (b) { b.disabled = true; });
+    if (pressed) {
+      pressed.classList.add("busy");
+      pressed.innerHTML = '<span class="spin" aria-hidden="true"></span>' + (pressed.dataset.busy || "Working…");
+      pressed.setAttribute("aria-busy", "true");
+    }
+  });
+});
+</script></body></html>`);
+}
+
+function pair(r) {
+  const name = r?.client?.client_name ?? "";
+  const theirs = r?.icon ? `<div class="logo"><img src="${esc(r.icon)}" alt="${esc(name)}"></div>` : `<div class="logo mono" aria-hidden="true">${esc(name.slice(0, 1).toUpperCase() || "?")}</div>`;
+  return `<div class="pair"><div class="logo" title="Opsmira">${OPSMIRA_MARK}</div><div class="link" aria-hidden="true"><i></i><i></i><i></i></div>${r ? theirs : ""}</div>`;
 }
 
 function errorPage(res, message) {
-  page(res, 400, "Can't connect", `<h1>This connection can't continue</h1><p>${esc(message)}</p><p>Start it again from the app you were connecting.</p>`);
+  page(res, 400, "Can't connect", `${pair(null)}<h1>This connection can't continue</h1><p class="sub">${esc(message)}</p><p class="foot">Start it again from the app you were connecting.</p>`);
 }
 
-function consentBody(id, r, sessionId) {
+function consentBody(id, r, sessionId, host) {
   const dest = new URL(r.redirectUri);
   const local = loopback(dest);
-  const who = r.client.metadataHost ? ` <span style="font-size:13px">(identified by ${esc(r.client.metadataHost)})</span>` : "";
-  return `<h1>Connect ${esc(r.client.client_name)} to Opsmira?</h1>
-<p><b>${esc(r.client.client_name)}</b>${who} wants to use this console's tools for you: list and read your servers, run commands on them, and ask Opsmira's agent, within the access you choose. You can revoke it any time under Surfaces in the console.</p>
-<div class="dest">After you answer, you go back to<br><code>${esc(local ? `${dest.hostname} (this computer, port ${dest.port || "80"})` : dest.host)}</code></div>
-${local ? `<div class="warn">This hands the sign-in to a program on your own computer. Allow it only if you just started connecting from one, such as Claude Code.</div>` : ""}
+  const name = esc(r.client.client_name);
+  const where = local ? `an app on this computer (port ${esc(dest.port || "80")})` : esc(dest.host);
+  return `${pair(r)}
+<h1>${name} wants to connect to Opsmira</h1>
+<p class="sub">on <b>${esc(host)}</b>${r.client.metadataHost ? ` · identified by <b>${esc(r.client.metadataHost)}</b>` : ""}</p>
+<ul class="facts">
+<li>${icon("eye")}<span><b>See your servers</b> and their live data</span></li>
+<li>${icon("terminal")}<span><b>Run commands</b> on servers that allow them</span></li>
+<li>${icon("spark")}<span><b>Ask Opsmira's agent</b> to look into things and act</span></li>
+<li>${icon("back")}<span>Then you go back to <b>${where}</b></span></li>
+</ul>
+${local ? `<div class="warn">${icon("alert")}<span>This hands the sign-in to a program on your own computer. Allow it only if you just started connecting from one, such as Claude Code.</span></div>` : ""}
 <form method="post" action="/oauth/authorize">
 <input type="hidden" name="request_id" value="${esc(id)}"><input type="hidden" name="csrf" value="${esc(csrfFor(sessionId, id))}">
+<div class="label">Access</div>
 <label class="opt"><input type="radio" name="access" value="ask" checked><div><b>Ask first</b><span>Reads and read-only commands. Changes Opsmira's agent proposes wait for your approval in the console.</span></div></label>
 <label class="opt"><input type="radio" name="access" value="full"><div><b>Full access</b><span>Any command on servers that allow commands, and Opsmira's agent acts without asking. Every command is in Activity.</span></div></label>
-<div class="row"><button type="submit" name="action" value="deny">Deny</button><button class="primary" type="submit" name="action" value="allow">Allow</button></div>
-</form>`;
+<div class="row"><button type="submit" name="action" value="deny" data-busy="Declining…">Deny</button><button class="primary" type="submit" name="action" value="allow" data-busy="Connecting…">Allow</button></div>
+</form>
+<p class="foot">${icon("shield").replace('class="ic"', 'class="ic" style="width:13px;height:13px;vertical-align:-2px;margin-right:4px"')}Revoke it any time under Surfaces → AI agents in the console.</p>`;
 }
 
-function loginBody(id, r, error) {
-  return `<h1>Sign in to connect ${esc(r.client.client_name)}</h1>
-<p>Sign in to this Opsmira console to decide what ${esc(r.client.client_name)} may do.</p>
-${error ? `<p class="err">${esc(error)}</p>` : ""}
+function loginBody(id, r, error, host) {
+  return `${pair(r)}
+<h1>Sign in to connect ${esc(r.client.client_name)}</h1>
+<p class="sub">Sign in to the Opsmira console on <b>${esc(host)}</b> to choose what ${esc(r.client.client_name)} may do.</p>
+${error ? `<p class="err">${icon("alert")}<span>${esc(error)}</span></p>` : ""}
 <form method="post" action="/oauth/authorize">
 <input type="hidden" name="request_id" value="${esc(id)}">
-<label class="field">Username<input name="username" autocomplete="username" required></label>
+<label class="field">Username<input name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required autofocus></label>
 <label class="field">Password<input name="password" type="password" autocomplete="current-password" required></label>
-<div class="row"><button class="primary" type="submit" name="action" value="login">Sign in</button></div>
+<div class="row one"><button class="primary" type="submit" name="action" value="login" data-busy="Signing in…">Sign in</button></div>
 </form>`;
 }
 
@@ -298,10 +441,11 @@ async function authorize(req, res) {
   }
   if (!sameResource(q.resource, req)) return backTo(res, req, redirectUri, { error: "invalid_target", error_description: "This console only issues tokens for its own MCP endpoint", state });
   const id = randomBytes(18).toString("base64url");
-  requests.set(id, { client, redirectUri, state, challenge: q.code_challenge, resource: resourceOf(req), createdAt: Date.now() });
+  const icon = await clientIcon(client).catch(() => null);
+  requests.set(id, { client, icon, redirectUri, state, challenge: q.code_challenge, resource: resourceOf(req), createdAt: Date.now() });
   const sessionId = sessionIdFromRequest(req);
-  if (!sessionId) return page(res, 200, "Sign in", loginBody(id, requests.get(id)));
-  return page(res, 200, "Connect an app", consentBody(id, requests.get(id), sessionId));
+  if (!sessionId) return page(res, 200, "Sign in", loginBody(id, requests.get(id), null, req.get("host")));
+  return page(res, 200, "Connect an app", consentBody(id, requests.get(id), sessionId, req.get("host")));
 }
 
 function decide(req, res) {
@@ -321,19 +465,19 @@ function decide(req, res) {
   const action = req.body?.action;
   if (action === "login") {
     const wait = loginBlockedFor(req.ip);
-    if (wait) return page(res, 429, "Sign in", loginBody(id, r, `Too many attempts. Try again in ${Math.ceil(wait / 60)} minutes.`));
+    if (wait) return page(res, 429, "Sign in", loginBody(id, r, `Too many attempts. Try again in ${Math.ceil(wait / 60)} minutes.`, req.get("host")));
     if (!checkLogin(req.body?.username, req.body?.password)) {
       noteLoginFailure(req.ip);
-      return page(res, 401, "Sign in", loginBody(id, r, "Wrong username or password."));
+      return page(res, 401, "Sign in", loginBody(id, r, "Wrong username or password.", req.get("host")));
     }
     clearLoginFailures(req.ip);
     const sessionId = issueSessionCookie(req, res);
-    return page(res, 200, "Connect an app", consentBody(id, r, sessionId));
+    return page(res, 200, "Connect an app", consentBody(id, r, sessionId, req.get("host")));
   }
   const sessionId = sessionIdFromRequest(req);
   const csrf = Buffer.from(String(req.body?.csrf ?? ""));
   const expected = sessionId ? Buffer.from(csrfFor(sessionId, id)) : null;
-  if (!expected || csrf.length !== expected.length || !timingSafeEqual(csrf, expected)) return page(res, 403, "Sign in", loginBody(id, r, "Sign in again to continue."));
+  if (!expected || csrf.length !== expected.length || !timingSafeEqual(csrf, expected)) return page(res, 403, "Sign in", loginBody(id, r, "Sign in again to continue.", req.get("host")));
   requests.delete(id);
   if (action !== "allow") return backTo(res, req, r.redirectUri, { error: "access_denied", error_description: "The owner declined", state: r.state });
   const code = randomBytes(32).toString("base64url");

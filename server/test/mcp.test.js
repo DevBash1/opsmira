@@ -109,6 +109,8 @@ test("no token, a wrong token, or a foreign page's origin: refused", async () =>
 test("the SDK client connects and sees the tools, with their annotations", async () => {
   const client = await connect(ask.token);
   assert.equal(client.getServerVersion().name, "opsmira");
+  // Its icon, for clients that show one (MCP 2025-11-25 serverInfo.icons).
+  assert.ok(client.getServerVersion().icons.some((i) => i.src.endsWith("/favicon.svg") && i.mimeType === "image/svg+xml"));
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map((t) => t.name).sort(), ["opsmira_ask", "opsmira_get_reply", "opsmira_list_servers", "opsmira_read_surface", "opsmira_run_command", "opsmira_stop"]);
   assert.equal(tools.find((t) => t.name === "opsmira_list_servers").annotations.readOnlyHint, true);
@@ -148,6 +150,11 @@ test("an ask token cannot change anything directly; a full token can, and both a
   const done = await call(fullClient, "opsmira_run_command", { command: "echo changed > /dev/null && echo ok", server: "agent:box" });
   assert.equal(done.structuredContent.output.trim(), "ok");
   assert.equal(readAudit().find((e) => e.by === "mcp" && e.client === "Ops bot")?.kind, "act");
+
+  // A limit of its own: on the connected server, the agent stops it when asked.
+  const cut = await call(fullClient, "opsmira_run_command", { command: "sleep 4; echo late", server: "agent:box", timeout_seconds: 1 });
+  assert.equal(cut.structuredContent.timed_out, true);
+  assert.doesNotMatch(cut.structuredContent.output, /late/);
 
   const unknown = await call(fullClient, "opsmira_run_command", { command: "uname", server: "agent:nope" });
   assert.equal(unknown.isError, true);

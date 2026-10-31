@@ -41,7 +41,7 @@ Each task has a chat of its own, named after the task (it shows in History). Whe
 ## Limits and costs
 
 - Every wake-up is a paid model turn, and a trigger's checks are free. Prefer the slowest schedule or interval that does the job.
-- At most 20 tasks. Wake-ups run one at a time, and a turn is stopped after 5 minutes.
+- At most 20 tasks. Wake-ups run one at a time, and a turn is stopped after 30 minutes.
 - A check must pass the same read-only test as the agent's `inspect` command (no redirects to files, no command substitution, only known diagnostic programs). It is checked again every time it runs.
 - A task is tied to the server it was made for. Windows servers can run schedules but not checks yet.
 - What a check prints is shown to the model. Do not make it print secrets, and remember that the contents of files and logs come from outside: that is why tasks ask before changing anything unless you allow it.

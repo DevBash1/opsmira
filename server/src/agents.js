@@ -262,13 +262,14 @@ export function callAgent(id, op, params = {}, timeoutMs = 15_000, { signal } = 
 }
 
 /** Run a shell command line on a connected server. Same result shape as exec.js's runCommand. */
-export async function runOnAgent(name, command, { signal } = {}) {
+export async function runOnAgent(name, command, { signal, timeoutMs = 900_000 } = {}) {
   const agent = agentByName(name);
   const started = Date.now();
   const fail = (output) => ({ exitCode: null, output, durationMs: Date.now() - started });
   if (!agent) return fail(`exec error: no connected server named ${name}`);
   if (!live.has(agent.id)) return fail(`exec error: ${name} is not connected right now`);
-  const r = await callAgent(agent.id, "shell", { command, timeout: 30_000 }, 40_000, { signal });
+  // The agent enforces the limit; this waits a little longer for its answer (agents before 0.2.0 stop at 2 minutes).
+  const r = await callAgent(agent.id, "shell", { command, timeout: timeoutMs }, timeoutMs + 15_000, { signal });
   if (r.stopped) return { exitCode: null, output: "", durationMs: Date.now() - started, stopped: true };
   // Refused or never ran (no exit code): say why, rather than returning an empty result.
   if (r.output === undefined || (r.code === null && !r.output && r.stderr)) return fail(`exec error: ${r.stderr || "no answer"}`);

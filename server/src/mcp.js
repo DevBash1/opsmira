@@ -13,7 +13,7 @@ import { AGENT_PREFIX, agentAccess, listAgents } from "./agents.js";
 import { loginBlockedFor, noteLoginFailure } from "./auth.js";
 import { contentText } from "./content.js";
 import { env } from "./env.js";
-import { classifyInspect, runCommand } from "./exec.js";
+import { classifyInspect, COMMAND_TIMEOUTS, commandTimeout, runCommand } from "./exec.js";
 import { getSession, persistSession } from "./state.js";
 import { appendAudit, loadConversation } from "./store.js";
 import { collectSurface, SURFACES } from "./surfaces.js";
@@ -22,7 +22,7 @@ import { buildInfo } from "./update.js";
 
 export const MCP_PATH = "/mcp";
 const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
-const TURN_TIMEOUT_MS = 10 * 60_000;
+const TURN_TIMEOUT_MS = 60 * 60_000; // a turn can include a long change (commands may run up to an hour)
 const DEFAULT_WAIT_S = 50; // under the 100 s a proxy such as Cloudflare allows a request
 const MAX_WAIT_S = 90;
 const CONVERSATION_ID = /^[A-Za-z0-9-]{8,64}$/;
@@ -288,18 +288,20 @@ const TOOLS = [
     name: "opsmira_run_command",
     title: "Run a command on a server",
     description:
-      "Run one shell command on a server and return its exit code and output (30 second limit, 64 KB of output). It goes straight to the server, without Opsmira's agent. With an \"ask\" token only read-only commands run (ls, cat, df, systemctl status, journalctl...); a \"full\" token may run anything. Every command lands in the console's audit log under this client's name. The server must allow commands (opsmira_list_servers says which do).",
+      `Run one shell command on a server and return its exit code and output (up to 64 KB). It may run ${Math.round(COMMAND_TIMEOUTS.inspect / 1000)} s when read-only and ${Math.round(COMMAND_TIMEOUTS.act / 1000)} s otherwise, or what timeout_seconds asks, up to ${Math.round(COMMAND_TIMEOUTS.max / 1000)} s. ` +
+      "It goes straight to the server, without Opsmira's agent. With an \"ask\" token only read-only commands run (ls, cat, df, systemctl status, journalctl...); a \"full\" token may run anything. Every command lands in the console's audit log under this client's name. The server must allow commands (opsmira_list_servers says which do).",
     inputSchema: {
       type: "object",
       properties: {
         command: { type: "string", description: "The shell command, run with /bin/sh -c (PowerShell on Windows servers)." },
         server: { type: "string", description: SERVER_DESC },
+        timeout_seconds: { type: "number", description: "Optional. How long it may run before it is killed. Ask for more for upgrades, builds or image pulls." },
       },
       required: ["command"],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
-    run: async ({ command, server }, token) => {
+    run: async ({ command, server, timeout_seconds }, token) => {
       const cmd = typeof command === "string" ? command.trim() : "";
       if (!cmd) throw new ToolError("command is required.");
       const target = targetServer(typeof server === "string" ? server : undefined, env.defaultServer);
@@ -308,7 +310,7 @@ const TOOLS = [
       if (token.access !== "full" && !readOnly.ok) {
         throw new ToolError(`This token only runs read-only commands, and this one is not (${readOnly.reason}). Ask Opsmira with opsmira_ask instead: it proposes the change for the owner to approve in the console.`);
       }
-      const run = await runCommand(cmd, { server: target.server });
+      const run = await runCommand(cmd, { server: target.server, timeoutMs: commandTimeout(readOnly.ok ? "inspect" : "act", timeout_seconds) });
       appendAudit({ id: randomUUID(), kind: readOnly.ok ? "inspect" : "act", by: "mcp", client: token.name, title: readOnly.ok ? undefined : `${token.name} (MCP)`, command: cmd, ...(target.server ? { server: target.server } : {}), ...run });
       const where = target.server ?? "local";
       const data = { server: where, command: cmd, exit_code: run.exitCode ?? null, output: run.output ?? "", duration_ms: run.durationMs ?? 0, timed_out: !!run.timedOut };
@@ -397,7 +399,17 @@ async function dispatch(method, params, token, ctx) {
       return {
         protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "opsmira", title: "Opsmira", version: buildInfo().version },
+        serverInfo: {
+          name: "opsmira",
+          title: "Opsmira",
+          version: buildInfo().version,
+          websiteUrl: ctx.consoleUrl,
+          icons: [
+            { src: `${ctx.consoleUrl}favicon.svg`, mimeType: "image/svg+xml", sizes: ["any"] },
+            { src: `${ctx.consoleUrl}icon-192.png`, mimeType: "image/png", sizes: ["192x192"] },
+            { src: `${ctx.consoleUrl}icon-512.png`, mimeType: "image/png", sizes: ["512x512"] },
+          ],
+        },
         instructions: INSTRUCTIONS,
       };
     }
@@ -464,10 +476,30 @@ export async function handleMcp(req, res) {
   // Notifications and responses from the client need no answer.
   if (msg.id === undefined || msg.method === undefined) return res.status(202).end();
   const ctx = { consoleUrl: `${req.protocol}://${req.get("host")}/` };
-  try {
-    const out = await dispatch(msg.method, msg.params ?? {}, token, ctx);
-    res.json({ jsonrpc: "2.0", id: msg.id, result: out });
-  } catch (err) {
-    res.json({ jsonrpc: "2.0", id: msg.id, error: { code: Number.isInteger(err.code) ? err.code : -32603, message: err.message } });
+  const answer = async () => {
+    try {
+      return { jsonrpc: "2.0", id: msg.id, result: await dispatch(msg.method, msg.params ?? {}, token, ctx) };
+    } catch (err) {
+      return { jsonrpc: "2.0", id: msg.id, error: { code: Number.isInteger(err.code) ? err.code : -32603, message: err.message } };
+    }
+  };
+  // A tool call can take minutes (a long command, Opsmira thinking). Proxies such as Cloudflare drop a request that
+  // sends nothing for 100 s, so a client that takes a stream gets one: a keep-alive comment every 15 s, then the
+  // answer as one event. Everything else is a plain JSON answer.
+  if (msg.method === "tools/call" && /text\/event-stream/.test(req.get("accept") ?? "")) {
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+    const keepAlive = setInterval(() => res.write(": keep-alive\n\n"), 15_000);
+    try {
+      res.write(`event: message\ndata: ${JSON.stringify(await answer())}\n\n`);
+    } finally {
+      clearInterval(keepAlive);
+      res.end();
+    }
+    return;
   }
+  res.json(await answer());
 }

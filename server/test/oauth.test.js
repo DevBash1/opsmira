@@ -91,7 +91,7 @@ test("a client finds the sign-in from a 401, registers, the owner approves, and 
   const { verifier, challenge } = pkce();
   const authorize = `${as.authorization_endpoint}?${form({ response_type: "code", client_id: client.client_id, redirect_uri: "https://claude.ai/api/mcp/auth_callback", code_challenge: challenge, code_challenge_method: "S256", state: "st4te", scope: "opsmira offline_access", resource: resource.resource })}`;
   const { location, consent } = await approve(authorize);
-  assert.match(consent, /Connect Claude to Opsmira/);
+  assert.match(consent, /Claude wants to connect to Opsmira/);
   assert.match(consent, /claude\.ai/);
   assert.equal(location.origin + location.pathname, "https://claude.ai/api/mcp/auth_callback");
   assert.equal(location.searchParams.get("state"), "st4te");

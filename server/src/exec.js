@@ -96,15 +96,30 @@ export function classifyInspect(command) {
 }
 
 const OUTPUT_CAP = 64 * 1024;
-const TIMEOUT_MS = 30_000;
+
+/* How long one command may run before it is killed. A read-only look runs without asking, so one that hangs should
+   not hold a reply for long; a change (approved, Full access, or typed by the owner) gets long enough for upgrades,
+   builds and image pulls. A single command can ask for more, up to the maximum. Seconds, from the environment. */
+const secs = (name, fallback) => Math.max(1, Number(process.env[name]) || fallback) * 1000;
+export const COMMAND_TIMEOUTS = {
+  inspect: secs("OPSMIRA_INSPECT_TIMEOUT", 120),
+  act: secs("OPSMIRA_COMMAND_TIMEOUT", 900),
+  max: secs("OPSMIRA_MAX_COMMAND_TIMEOUT", 3600),
+};
+
+/** Milliseconds for a command of this kind ("inspect" or "act"), or the seconds asked for, within the maximum. */
+export function commandTimeout(kind, askedSeconds) {
+  const asked = Number(askedSeconds) > 0 ? Number(askedSeconds) * 1000 : kind === "inspect" ? COMMAND_TIMEOUTS.inspect : COMMAND_TIMEOUTS.act;
+  return Math.min(Math.max(asked, 1000), COMMAND_TIMEOUTS.max);
+}
 
 /**
  * Run a shell command with a hard timeout, output cap, and a stripped env.
  * An optional AbortSignal (the owner pressing Stop) kills it; the result is then marked `stopped`.
  */
-export function runCommand(command, { signal, server } = {}) {
+export function runCommand(command, { signal, server, timeoutMs = COMMAND_TIMEOUTS.act } = {}) {
   // A server that connected itself runs it there; nothing else changes for the caller.
-  if (typeof server === "string" && server.startsWith(AGENT_PREFIX)) return runOnAgent(server.slice(AGENT_PREFIX.length), command, { signal });
+  if (typeof server === "string" && server.startsWith(AGENT_PREFIX)) return runOnAgent(server.slice(AGENT_PREFIX.length), command, { signal, timeoutMs });
   return new Promise((resolve) => {
     const safeEnv = { ...process.env };
     for (const key of Object.keys(safeEnv)) {
@@ -114,7 +129,7 @@ export function runCommand(command, { signal, server } = {}) {
     const child = spawn("/bin/sh", ["-c", command], {
       cwd: homedir(),
       env: safeEnv,
-      timeout: TIMEOUT_MS,
+      timeout: timeoutMs,
       signal,
     });
 
@@ -138,7 +153,7 @@ export function runCommand(command, { signal, server } = {}) {
         signal: killSignal,
         output: output.trim(),
         durationMs: Date.now() - started,
-        timedOut: killSignal === "SIGTERM" && Date.now() - started >= TIMEOUT_MS,
+        timedOut: killSignal === "SIGTERM" && Date.now() - started >= timeoutMs,
         ...(signal?.aborted ? { stopped: true } : {}),
       });
     });
