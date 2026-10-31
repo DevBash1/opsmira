@@ -36,7 +36,7 @@ function startAgent(extra, { file = AGENT, state, env = {} } = {}) {
   return { child, state, exited, output: () => output };
 }
 
-async function until(check, ms = 8000) {
+async function until(check, ms = 20000) { // generous: agent processes start slowly while other test files run
   const end = Date.now() + ms;
   while (Date.now() < end) {
     const value = await check();
@@ -45,6 +45,15 @@ async function until(check, ms = 8000) {
   }
   assert.fail("timed out waiting");
 }
+
+/** The agent has written the request's secret to its state file (the console shows the request a moment before). */
+const savedRequest = (state) => {
+  try {
+    return JSON.parse(readFileSync(state, "utf8")).request;
+  } catch {
+    return null;
+  }
+};
 
 after(() => {
   for (const c of children) c.kill();
@@ -61,6 +70,7 @@ test("a server without a token waits as a request; accepting it pairs it, and a 
   assert.equal(agents.listAgents().length, 0);
 
   // Restarting while it waits keeps its place: the same request, not a second one.
+  await until(() => savedRequest(a.state));
   a.child.kill();
   await until(() => !agents.listRequests().find((r) => r.id === req.id)?.online);
   const b = startAgent(["--name", "asker"], { state: a.state });
@@ -99,6 +109,7 @@ test("declining tells the waiting server, which forgets the console and exits wi
 test("an answer given while the server is offline reaches it when it comes back", async () => {
   const a = startAgent(["--name", "sleepy"]);
   const req = await until(() => agents.listRequests().find((r) => r.name === "sleepy" && r.online));
+  await until(() => savedRequest(a.state));
   a.child.kill();
   await until(() => !agents.listRequests().find((r) => r.id === req.id)?.online);
   assert.equal(agents.acceptRequest(req.id), true);

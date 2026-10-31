@@ -65,7 +65,9 @@ can follow them and approve what they propose.
   a conversation stands.
 - **`opsmira_stop`** `{ conversation_id }`: stops Opsmira's agent in that conversation, like the Stop button.
 
-Pass `conversation_id` back to `opsmira_ask` to continue a conversation.
+Pass `conversation_id` back to `opsmira_ask` to continue a conversation. Opsmira's agent answers with the model you
+last chose in the console (the console tells the server whenever you pick one); `model` on `opsmira_ask` picks another
+for that conversation. Every answer names the model that gave it, so a model error is easy to place.
 
 ## Security
 

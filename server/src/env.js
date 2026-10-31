@@ -59,7 +59,7 @@ export const env = {
   host: process.env.HOST || "127.0.0.1",
   openrouterApiKey: process.env.OPENROUTER_API_KEY,
   openrouterBaseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
-  model: process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4.5",
+  model: process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-5.5",
   username,
   password,
   // Stable across restarts, so owners are not signed out every time the server restarts.

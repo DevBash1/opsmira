@@ -1077,7 +1077,10 @@ function ConsoleApp({
         } catch {
           // ignore — private browsing / blocked storage
         }
-        setModel(stored && r.models.some((m) => m.id === stored) ? stored : r.default);
+        const chosen = stored && r.models.some((m) => m.id === stored) ? stored : r.default;
+        setModel(chosen);
+        // The console remembers the owner's model for work that starts without them (MCP clients, tasks).
+        if (chosen && chosen !== r.default) api.preferModel(chosen).catch(() => {});
       })
       .catch(() => {});
     refreshAudit();
@@ -1269,6 +1272,7 @@ function ConsoleApp({
 
   const pickModel = (id: string) => {
     setModel(id);
+    api.preferModel(id).catch(() => {});
     try {
       localStorage.setItem(MODEL_STORAGE_KEY, id);
     } catch {

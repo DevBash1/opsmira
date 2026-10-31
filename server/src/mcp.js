@@ -14,6 +14,7 @@ import { loginBlockedFor, noteLoginFailure } from "./auth.js";
 import { contentText } from "./content.js";
 import { env } from "./env.js";
 import { classifyInspect, COMMAND_TIMEOUTS, commandTimeout, runCommand } from "./exec.js";
+import { getModels, preferredModel } from "./models.js";
 import { getSession, persistSession } from "./state.js";
 import { appendAudit, loadConversation } from "./store.js";
 import { collectSurface, SURFACES } from "./surfaces.js";
@@ -149,10 +150,13 @@ function owns(conversationId, token) {
 }
 const notGivenOut = () => new ToolError("conversation_id is not one this console gave out to this client. Leave it out to start a new conversation.");
 
-function startTurn(conversationId, message, token, server) {
+function startTurn(conversationId, message, token, server, model) {
   for (const [id, t] of turns) if (t.done && Date.now() - t.endedAt > KEEP_TURN_MS) turns.delete(id);
   const session = getSession(null, conversationId);
   if (!session.via) session.via = `mcp:${token.id}`;
+  // The model asked for, else the conversation's, else the one the owner last chose in the console.
+  if (model) session.lastModel = model;
+  const usedModel = session.lastModel || preferredModel();
   if (session.run) throw new ToolError(`Opsmira is still working in conversation ${conversationId}. Call opsmira_get_reply with it, or opsmira_stop.`);
   const fresh = !session.conversation.some((m) => m.role === "user");
   const abort = new AbortController();
@@ -168,11 +172,11 @@ function startTurn(conversationId, message, token, server) {
     ask: true,
     content: `[From ${token.name}, an AI agent connected over MCP, not the owner. Answer it fully in your reply: it cannot tap suggestions, and only the owner can approve changes, in the console.]\n\n${message}`,
   });
-  const t = { events: [], done: false, error: null, startedAt: Date.now(), endedAt: 0, via: session.via };
+  const t = { events: [], done: false, error: null, startedAt: Date.now(), endedAt: 0, via: session.via, model: usedModel };
   const timer = setTimeout(() => abort.abort(), TURN_TIMEOUT_MS);
   t.promise = (async () => {
     try {
-      await runTurn(session.conversation, (e) => t.events.push(e), session.lastModel, session.pendingApprovals, {
+      await runTurn(session.conversation, (e) => t.events.push(e), usedModel, session.pendingApprovals, {
         signal: abort.signal,
         steers: session.run.steers,
         vision: false,
@@ -218,16 +222,17 @@ function turnReport(conversationId, t, consoleUrl) {
     reply = last ? contentText(last.content) : "";
   }
   const status = t && !t.done ? "working" : approvals.length ? "waiting_for_approval" : errors.length && !reply ? "error" : "done";
-  const data = { conversation_id: conversationId, status, reply, commands, approvals_waiting: approvals, errors, console_url: consoleUrl };
+  const model = t?.model ?? (session.lastModel || preferredModel());
+  const data = { conversation_id: conversationId, status, model, reply, commands, approvals_waiting: approvals, errors, console_url: consoleUrl };
   const lines = [];
-  lines.push(`Conversation ${conversationId} · ${status.replace(/_/g, " ")}`);
+  lines.push(`Conversation ${conversationId} · ${status.replace(/_/g, " ")} · model ${model}`);
   if (status === "working") lines.push("Opsmira is still working. Call opsmira_get_reply with this conversation_id to wait for the answer.");
   if (reply) lines.push("", reply);
   if (commands.length) lines.push("", `Commands it ran (${commands.length}):`, ...commands.map((c) => `- ${c.server}: ${c.command} → exit ${c.exit_code ?? "?"}`));
   if (approvals.length) {
     lines.push("", "Waiting for the owner's approval in the console (an MCP client cannot approve):", ...approvals.map((a) => `- ${a.title} (${a.server}, risk ${a.risk})`), `Console: ${consoleUrl}`);
   }
-  if (errors.length) lines.push("", `Errors: ${errors.join("; ")}`);
+  if (errors.length) lines.push("", `Errors (model ${model}): ${errors.join("; ")}`, "If the model is the problem, pass another in opsmira_ask's model, or pick one in the console's model menu.");
   return result(lines.join("\n"), data);
 }
 
@@ -329,20 +334,30 @@ const TOOLS = [
         conversation_id: { type: "string", description: "Continue this conversation (from an earlier result). Leave it out to start a new one." },
         server: { type: "string", description: `${SERVER_DESC} Opsmira's agent can still reach the others by name.` },
         wait_seconds: { type: "number", description: `How long to wait for the answer, 1 to ${MAX_WAIT_S} (default ${DEFAULT_WAIT_S}).` },
+        model: { type: "string", description: "Optional OpenRouter model id (e.g. anthropic/claude-sonnet-5.5) for this conversation. Leave it out to use the model the owner last chose in the console. The result always says which model answered." },
       },
       required: ["message"],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
-    run: async ({ message, conversation_id, server, wait_seconds }, token, ctx) => {
+    run: async ({ message, conversation_id, server, wait_seconds, model }, token, ctx) => {
       const text = typeof message === "string" ? message.trim() : "";
       if (!text) throw new ToolError("message is required.");
       if (conversation_id !== undefined && (!CONVERSATION_ID.test(String(conversation_id)) || !owns(String(conversation_id), token))) throw notGivenOut();
       if (server !== undefined && typeof server === "string" && server.trim() && server.trim() !== "local" && !listAgents().some((a) => a.host === server.trim())) {
         throw new ToolError(`Unknown server "${server}". Call opsmira_list_servers for the ids.`);
       }
+      let chosen;
+      if (typeof model === "string" && model.trim()) {
+        const catalog = await getModels();
+        chosen = model.trim();
+        // An empty catalog means OpenRouter could not be asked: let the request decide rather than refuse.
+        if (catalog.length && !catalog.some((m) => m.id === chosen)) {
+          throw new ToolError(`"${chosen}" is not a model this console can use (it needs tool calling, and your OpenRouter account must offer it). Leave model out to use the one the owner chose: ${preferredModel()}.`);
+        }
+      }
       const id = conversation_id ? String(conversation_id) : randomUUID();
-      const t = startTurn(id, text.slice(0, 20000), token, typeof server === "string" ? defaultFor(server.trim()) || "local" : undefined);
+      const t = startTurn(id, text.slice(0, 20000), token, typeof server === "string" ? defaultFor(server.trim()) || "local" : undefined, chosen);
       await wait(t, wait_seconds);
       return turnReport(id, t, ctx.consoleUrl);
     },

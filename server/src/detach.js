@@ -6,6 +6,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { join } from "path";
 import { AGENT_PREFIX, agentAccess, agentByName, agentCaps, callAgent, onAgentEvent } from "./agents.js";
 import { env } from "./env.js";
+import { preferredModel } from "./models.js";
 import { getSession, persistSession } from "./state.js";
 import { appendAudit } from "./store.js";
 
@@ -65,7 +66,7 @@ export async function startDetached(proposal, conversationId, { console: console
     plan: d.plan,
     why: d.why,
     server: name,
-    model: d.model || env.model,
+    model: d.model || preferredModel(),
     baseUrl: env.openrouterBaseUrl,
     maxSteps: Math.min(Math.max(Number(d.maxSteps) || 40, 5), MAX_STEPS),
     deadline: new Date(Date.now() + minutes * 60_000).toISOString(),

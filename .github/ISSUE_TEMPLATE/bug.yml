@@ -27,7 +27,7 @@ body:
     id: model
     attributes:
       label: Model
-      placeholder: anthropic/claude-sonnet-4.5
+      placeholder: anthropic/claude-sonnet-5.5
   - type: textarea
     id: logs
     attributes:

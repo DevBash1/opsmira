@@ -310,6 +310,8 @@ export const api = {
   createMcpToken: (options: { name: string; access: "ask" | "full" }) =>
     post("/api/mcp/tokens", options).then((r) => json<McpToken & { token: string; url: string; clients: { claudeCode: string; json: string } }>(r)),
   revokeMcpToken: (id: string) => fetch(`/api/mcp/tokens/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers() }).then((r) => json<{ ok: true }>(r)),
+  /** Tell the console which model the owner picked, for work that starts without them (MCP, tasks). */
+  preferModel: (model: string) => post("/api/models/preferred", { model }).then((r) => json<{ ok: true }>(r)),
   update: () => fetch("/api/update").then((r) => json<UpdateStatus>(r)),
   answerJoin: (id: string, answer: "accept" | "decline") => post(`/api/agents/requests/${encodeURIComponent(id)}/${answer}`, {}).then((r) => json<{ ok: true }>(r)),
   agentCredential: (options: { name: string; access: "read-only" | "operate" }) =>

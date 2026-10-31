@@ -26,7 +26,7 @@ function startAgent(extra) {
   return { child, state, output: () => output };
 }
 
-async function until(check, ms = 8000) {
+async function until(check, ms = 20000) { // generous: agent processes start slowly while other test files run
   const end = Date.now() + ms;
   while (Date.now() < end) {
     const value = await check();

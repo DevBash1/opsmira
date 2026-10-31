@@ -50,6 +50,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
   show one.
 
 ### Fixed
+- Work that starts without the owner choosing a model (MCP requests, tasks, chat titles, detached runs) used the
+  built-in default model, which an OpenRouter account may not be able to use ("404 Provider returned error"). It now
+  uses the model the owner last chose in the console; MCP answers say which model answered, and `opsmira_ask` takes
+  a `model`. The built-in default is now `anthropic/claude-sonnet-5.5`.
 - Accepting a server that asked to join could loop (Accept, it vanishes, it asks again) for agents from before join
   requests: they do not keep the request's secret and came back as a new request. A server still waiting is now
   let in on the connection it waits on, an old agent's repeat requests are recognised by its token (one request,

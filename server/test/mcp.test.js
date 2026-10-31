@@ -14,11 +14,19 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import "./setup.js";
 
 // The model: answers by what it is asked. "uname" → inspects first; "slow" → takes its time; "fix" → proposes.
+let lastModelAsked = null;
 const model = createServer((req, res) => {
+  // The catalog: two models that can call tools.
+  if (req.method === "GET" && req.url.endsWith("/models")) {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ data: ["test/owner-pick", "test/other"].map((id) => ({ id, name: id, supported_parameters: ["tools"], architecture: { input_modalities: ["text"] } })) }));
+    return;
+  }
   let body = "";
   req.on("data", (c) => (body += c));
   req.on("end", async () => {
     const parsed = JSON.parse(body);
+    lastModelAsked = parsed.model;
     const asked = [...parsed.messages].reverse().find((m) => m.role === "user")?.content ?? "";
     const text = typeof asked === "string" ? asked : JSON.stringify(asked);
     const answered = parsed.messages.at(-1)?.role === "tool";
@@ -196,6 +204,27 @@ test("a client reaches only its own conversations: not the console's chats, not 
   const other = await connect(full.token);
   assert.equal((await call(other, "opsmira_get_reply", { conversation_id: mine })).isError, true);
   assert.equal((await call(client, "opsmira_get_reply", { conversation_id: mine })).structuredContent.reply, "Hello from Opsmira.");
+});
+
+test("it answers with the model the owner last chose in the console, says so, and takes another when asked", async () => {
+  const { rememberModel } = await import("../src/models.js");
+  rememberModel("test/owner-pick");
+  const client = await connect(ask.token);
+  const r = await call(client, "opsmira_ask", { message: "hello" });
+  assert.equal(lastModelAsked, "test/owner-pick");
+  assert.equal(r.structuredContent.model, "test/owner-pick");
+  assert.match(r.content[0].text, /model test\/owner-pick/);
+
+  const other = await call(client, "opsmira_ask", { message: "hello", model: "test/other" });
+  assert.equal(lastModelAsked, "test/other");
+  assert.equal(other.structuredContent.model, "test/other");
+  // and the conversation keeps it
+  const again = await call(client, "opsmira_ask", { message: "hello", conversation_id: other.structuredContent.conversation_id });
+  assert.equal(again.structuredContent.model, "test/other");
+
+  const bad = await call(client, "opsmira_ask", { message: "hello", model: "nope/retired" });
+  assert.equal(bad.isError, true);
+  assert.match(bad.content[0].text, /not a model this console can use.*test\/owner-pick/s);
 });
 
 test("a long answer comes back as working, and get_reply waits for the rest", async () => {

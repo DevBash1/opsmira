@@ -13,6 +13,7 @@ import { addMemory, deleteArtifact, listArtifacts, readArtifact, readMemory, rem
 import { cleanSuggestions, noDashes, safeParse } from "./text.js";
 import { createTask, describeTask, getTask, listTasks, removeTask, updateTask } from "./tasks.js";
 import { selfUpdateNote } from "./update.js";
+import { preferredModel } from "./models.js";
 import { MAX_MINUTES as DETACH_MAX_MINUTES, MAX_STEPS as DETACH_MAX_STEPS, detachProblem } from "./detach.js";
 import { completeStreaming } from "./stream.js";
 
@@ -631,7 +632,7 @@ export async function runTurn(
       completion = await completeStreaming(
         client,
         {
-          model: model || env.model,
+          model: model || preferredModel(),
           messages,
           tools: TOOLS,
           max_tokens: tokenCap,
@@ -684,7 +685,7 @@ export async function runTurn(
         try {
           const continuation = await client.chat.completions.create(
             {
-              model: model || env.model,
+              model: model || preferredModel(),
               messages: [
                 ...messages,
                 { role: "assistant", content: text },
@@ -720,7 +721,7 @@ export async function runTurn(
       if (!raw) {
         // Say what the model sent instead, so an empty reply can be told apart from one that hid its answer elsewhere.
         const { content, tool_calls, ...rest } = msg;
-        console.warn(`[ai] empty reply from ${model || env.model}: finish=${choice.finish_reason} content=${JSON.stringify(content)} fields=${JSON.stringify(rest).slice(0, 600)}`);
+        console.warn(`[ai] empty reply from ${model || preferredModel()}: finish=${choice.finish_reason} content=${JSON.stringify(content)} fields=${JSON.stringify(rest).slice(0, 600)}`);
       }
       // Models sometimes end a turn with nothing, or with "Now let me check..." and no tool call. That is
       // the agent stopping halfway: nudge it to carry on (twice at most) instead of leaving the owner hanging.
@@ -1040,7 +1041,7 @@ export async function runTurn(
   try {
     const summary = await client.chat.completions.create(
       {
-        model: model || env.model,
+        model: model || preferredModel(),
         messages: [
           ...messages,
           {

@@ -20,7 +20,7 @@ import { retitle } from "./titles.js";
 import { conversationIdOf, describeTask, isFiring, listTasks, removeTask, startScheduler, updateTask } from "./tasks.js";
 import { fireTask, runCheck, waitingFor } from "./taskrun.js";
 import { defaultFor, ownerCommand, pickServer, runOwnerCommand, runTurn } from "./ai.js";
-import { getModels, getModelInfo } from "./models.js";
+import { getModelInfo, getModels, preferredModel, rememberModel } from "./models.js";
 import { contentImages, contentText, parseUserInput, userContent } from "./content.js";
 import { commandTimeout, runCommand } from "./exec.js";
 import { getSession, deleteSession, persistSession, removeConversation } from "./state.js";
@@ -354,7 +354,19 @@ app.get("/api/audit", (req, res) => {
 
 app.get("/api/models", async (req, res) => {
   const models = await getModels();
-  res.json({ models, default: env.model });
+  res.json({ models, default: preferredModel() });
+});
+
+/** The owner picked a model in the console: remember it for work that starts without them (MCP clients, tasks). */
+app.post("/api/models/preferred", async (req, res) => {
+  const id = typeof req.body?.model === "string" ? req.body.model.trim() : "";
+  const catalog = await getModels();
+  if (!id || (catalog.length && !catalog.some((m) => m.id === id))) {
+    res.status(400).json({ error: "Unknown model" });
+    return;
+  }
+  rememberModel(id);
+  res.json({ ok: true });
 });
 
 /** One turn at a time per conversation. Returns the new run, or null if one is already in flight. */
@@ -381,7 +393,7 @@ async function resolveModel(requested, fallback) {
 
 /** Unknown models are treated as text-only, so images are never sent somewhere that can't take them. */
 async function visionFor(model) {
-  return (await getModelInfo(model || env.model))?.vision ?? false;
+  return (await getModelInfo(model || preferredModel()))?.vision ?? false;
 }
 
 app.post("/api/chat", async (req, res) => {
@@ -410,7 +422,10 @@ app.post("/api/chat", async (req, res) => {
   }
   if (!run) return busy(res);
   const { conversation, pendingApprovals } = session;
-  if (model) session.lastModel = model;
+  if (model) {
+    session.lastModel = model;
+    rememberModel(model);
+  }
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");

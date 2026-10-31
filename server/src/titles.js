@@ -1,6 +1,7 @@
 // Chat titles written by the model: one after the first exchange, then a fresh one from the last 10 messages
 // each time another 50 of the owner's messages have gone by. Runs after a turn, never inside it.
 import OpenAI from "openai";
+import { preferredModel } from "./models.js";
 import { env } from "./env.js";
 import { contentText } from "./content.js";
 import { persistSession } from "./state.js";
@@ -84,7 +85,7 @@ export async function retitle(session, { complete = askModel } = {}) {
     const transcript = slice.map((m) => `${m.role}: ${m.text}`).join("\n");
     const current = session.title ? `Current title: ${session.title}\nKeep it if it still fits; otherwise write one for what the chat is about now.\n\n` : "";
     const asks = askCount(session.conversation);
-    const title = cleanTitle(await complete(session.lastModel || env.model, SYSTEM, `${current}${transcript}`));
+    const title = cleanTitle(await complete(session.lastModel || preferredModel(), SYSTEM, `${current}${transcript}`));
     session.titleTriedAt = Date.now();
     if (!title) return false;
     session.title = title;

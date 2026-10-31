@@ -1,4 +1,34 @@
+import { readFileSync, renameSync, writeFileSync } from "fs";
+import { join } from "path";
 import { env } from "./env.js";
+
+/* The model the owner last chose in the console. Work that starts without the owner choosing (MCP clients, tasks,
+   chat titles, detached runs) uses it, so it runs on a model the owner's account can use, not only the built-in
+   default (OPENROUTER_MODEL), which an account may not have access to. */
+const PREF_FILE = join(env.dataDir, "preferences.json");
+let preferred = (() => {
+  try {
+    const m = JSON.parse(readFileSync(PREF_FILE, "utf8")).model;
+    return typeof m === "string" && m ? m : null;
+  } catch {
+    return null;
+  }
+})();
+
+export function rememberModel(id) {
+  if (typeof id !== "string" || !id || id === preferred) return;
+  preferred = id;
+  try {
+    const tmp = `${PREF_FILE}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ model: id }), { mode: 0o600 });
+    renameSync(tmp, PREF_FILE);
+  } catch {
+    // remembered for this run
+  }
+}
+
+/** The owner's last choice, else the configured default. */
+export const preferredModel = () => preferred || env.model;
 
 const TTL_MS = 6 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
