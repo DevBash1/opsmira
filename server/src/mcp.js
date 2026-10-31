@@ -139,6 +139,26 @@ const result = (text, data) => ({ content: [{ type: "text", text }], ...(data ? 
 const turns = new Map();
 const KEEP_TURN_MS = 60 * 60_000;
 
+/** MCP turns still running, for the console to show and follow live. */
+export const liveTurns = () =>
+  [...turns.entries()]
+    .filter(([, t]) => !t.done)
+    .map(([id, t]) => ({ conversationId: id, client: t.client, ask: t.ask, model: t.model, startedAt: new Date(t.startedAt).toISOString() }));
+
+/**
+ * Follow a running turn from the console: what it has done so far, then each event as it happens, then
+ * { type: "done" }. Null when nothing is running there. Watching never stops the turn.
+ */
+export function watchTurn(conversationId, listener) {
+  const t = turns.get(conversationId);
+  if (!t || t.done) return null;
+  t.listeners.add(listener);
+  return {
+    snapshot: { ask: t.ask, client: t.client, model: t.model, startedAt: new Date(t.startedAt).toISOString(), events: [...t.events] },
+    stop: () => t.listeners.delete(listener),
+  };
+}
+
 /**
  * A client reaches only the conversations it started (with this token): not the owner's console chats, not tasks,
  * not another client's. Checked without loading anything that does not belong to it.
@@ -167,16 +187,25 @@ function startTurn(conversationId, message, token, server, model) {
     session.titledAt = 1e9;
   }
   // Tell the agent who it is talking to: another AI, which reads the reply but cannot tap suggestions or approve.
+  // `shown` is what the console shows for it; `from` labels it there. Models see only `content`.
   session.conversation.push({
     role: "user",
     ask: true,
+    from: token.name,
+    shown: message,
     content: `[From ${token.name}, an AI agent connected over MCP, not the owner. Answer it fully in your reply: it cannot tap suggestions, and only the owner can approve changes, in the console.]\n\n${message}`,
   });
-  const t = { events: [], done: false, error: null, startedAt: Date.now(), endedAt: 0, via: session.via, model: usedModel };
+  // Saved now, so it is in the console's History while it runs.
+  persistSession(session);
+  const t = { events: [], listeners: new Set(), done: false, error: null, startedAt: Date.now(), endedAt: 0, via: session.via, model: usedModel, client: token.name, ask: message };
+  const emit = (e) => {
+    t.events.push(e);
+    for (const listener of t.listeners) listener(e);
+  };
   const timer = setTimeout(() => abort.abort(), TURN_TIMEOUT_MS);
   t.promise = (async () => {
     try {
-      await runTurn(session.conversation, (e) => t.events.push(e), usedModel, session.pendingApprovals, {
+      await runTurn(session.conversation, emit, usedModel, session.pendingApprovals, {
         signal: abort.signal,
         steers: session.run.steers,
         vision: false,
@@ -192,6 +221,9 @@ function startTurn(conversationId, message, token, server, model) {
       if (!fresh) retitle(session);
       t.done = true;
       t.endedAt = Date.now();
+      if (t.error && t.error !== "stopped") for (const listener of t.listeners) listener({ type: "error", text: t.error });
+      for (const listener of t.listeners) listener({ type: "done" });
+      t.listeners.clear();
     }
   })();
   turns.set(conversationId, t);
@@ -215,18 +247,21 @@ function turnReport(conversationId, t, consoleUrl) {
       .filter((e) => e.type === "tool_result" && typeof e.command === "string")
       .map((e) => ({ server: e.server || "local", command: e.command, exit_code: e.exitCode ?? null, output: clip(e.output, 2000), ...(e.stopped ? { stopped: true } : {}) }));
     errors = t.events.filter((e) => e.type === "error").map((e) => e.text);
-    if (t.error) errors.push(t.error);
+    if (t.error && t.error !== "stopped") errors.push(t.error);
   } else {
     // Started before this process (or from the console): the conversation is all there is.
     const last = [...session.conversation].reverse().find((m) => m.role === "assistant" && contentText(m.content).trim());
     reply = last ? contentText(last.content) : "";
   }
-  const status = t && !t.done ? "working" : approvals.length ? "waiting_for_approval" : errors.length && !reply ? "error" : "done";
+  // Stopped by the owner in the console, or with opsmira_stop.
+  const stopped = !!t && (t.error === "stopped" || t.events.some((e) => e.type === "stopped"));
+  const status = t && !t.done ? "working" : approvals.length ? "waiting_for_approval" : stopped ? "stopped" : errors.length && !reply ? "error" : "done";
   const model = t?.model ?? (session.lastModel || preferredModel());
   const data = { conversation_id: conversationId, status, model, reply, commands, approvals_waiting: approvals, errors, console_url: consoleUrl };
   const lines = [];
   lines.push(`Conversation ${conversationId} · ${status.replace(/_/g, " ")} · model ${model}`);
   if (status === "working") lines.push("Opsmira is still working. Call opsmira_get_reply with this conversation_id to wait for the answer.");
+  if (status === "stopped") lines.push("This turn was stopped before it finished (by the owner in the console, or with opsmira_stop). What it did so far is below.");
   if (reply) lines.push("", reply);
   if (commands.length) lines.push("", `Commands it ran (${commands.length}):`, ...commands.map((c) => `- ${c.server}: ${c.command} → exit ${c.exit_code ?? "?"}`));
   if (approvals.length) {

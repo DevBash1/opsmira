@@ -95,9 +95,12 @@ export function toModelMessages(conversation, vision) {
       return rest;
     }
     if (m.role !== "user") return m;
-    // `ask` only marks where an owner message starts a turn (for rewind and history): models never see it.
-    const { ask, ...rest } = m;
+    // `ask` only marks where an owner message starts a turn (for rewind and history); `from` and `shown` label a
+    // message an MCP client sent, for the console. Models never see them.
+    const { ask, from, shown, ...rest } = m;
     void ask;
+    void from;
+    void shown;
     return Array.isArray(rest.content) ? { ...rest, content: modelContent(rest.content, vision) } : rest;
   });
 }

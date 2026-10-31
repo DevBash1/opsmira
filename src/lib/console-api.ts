@@ -137,13 +137,31 @@ export interface ServerTurn {
   artifacts: { action: "saved" | "loaded" | "deleted"; id: string; title: string }[];
   tasks?: { action: "created" | "removed" | "paused" | "resumed"; id: string; name: string }[];
   stopped: boolean;
+  /** The MCP client that sent the ask, when it was not the owner. */
+  from?: string;
 }
+
+/** A turn an MCP client started that is still running. */
+export interface LiveTurn {
+  conversationId: string;
+  client: string;
+  ask: string;
+  model: string;
+  startedAt: string;
+}
+
+/** Following a running MCP turn: what it has done so far, then each event as it happens. */
+export type WatchEvent = ChatEvent | { type: "snapshot"; ask: string; client: string; model: string; startedAt: string; events: ChatEvent[] };
 
 export interface ConversationSummary {
   id: string;
   title: string;
   updatedAt: string;
   messages: number;
+  /** Started by this MCP client. */
+  client?: string;
+  /** The client's turn is running now. */
+  live?: boolean;
 }
 
 export interface ArtifactSummary {
@@ -281,6 +299,13 @@ export const api = {
   history: () => fetch("/api/history", { headers: headers() }).then((r) => json<{ turn: ServerTurn | null; pending: Proposal[] }>(r)),
   conversations: () =>
     fetch("/api/conversations", { headers: headers() }).then((r) => json<{ conversations: ConversationSummary[]; current: string | null }>(r)),
+  live: () => fetch("/api/live", { headers: headers() }).then((r) => json<{ turns: LiveTurn[] }>(r)),
+  /** Follow a running MCP turn until it ends. Throws ApiError 404 when nothing is running there. */
+  async watch(id: string, onEvent: (e: WatchEvent) => void, signal?: AbortSignal) {
+    const res = await fetch(`/api/conversations/${encodeURIComponent(id)}/live`, { headers: headers(), signal });
+    if (!res.ok) await fail(res, `Couldn't follow that conversation (HTTP ${res.status}).`);
+    await readEvents(res, onEvent);
+  },
   deleteConversation: (id: string) =>
     fetch(`/api/conversations/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers() }).then((r) => json<{ ok: true }>(r)),
   /** Take back the latest message (and the agent's work after it) so it can be edited and sent again. */
@@ -357,21 +382,26 @@ export const api = {
       signal,
     });
     if (!res.ok) await fail(res, `The server couldn't start that turn (HTTP ${res.status}).`);
-    if (!res.body) throw new Error("No response stream");
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const chunks = buffer.split("\n\n");
-      buffer = chunks.pop() ?? "";
-      for (const chunk of chunks) {
-        const line = chunk.split("\n").find((l) => l.startsWith("data: "));
-        if (!line) continue;
-        onEvent(JSON.parse(line.slice(6)));
-      }
-    }
+    await readEvents(res, onEvent);
   },
 };
+
+/** Each event of a server-sent event stream, until it ends. */
+async function readEvents<E>(res: Response, onEvent: (e: E) => void) {
+  if (!res.body) throw new Error("No response stream");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+    for (const chunk of chunks) {
+      const line = chunk.split("\n").find((l) => l.startsWith("data: "));
+      if (!line) continue;
+      onEvent(JSON.parse(line.slice(6)));
+    }
+  }
+}

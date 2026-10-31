@@ -86,7 +86,7 @@ export function saveConversation(id, data) {
   if (!ID.test(id)) return;
   writeJson(join(CONVERSATIONS_DIR, `${id}.json`), data);
   const index = readIndex();
-  index[id] = { id, title: data.title, updatedAt: data.updatedAt, createdAt: data.createdAt, messages: data.messages };
+  index[id] = { id, title: data.title, updatedAt: data.updatedAt, createdAt: data.createdAt, messages: data.messages, ...(data.via ? { via: data.via } : {}) };
   writeJson(INDEX_PATH, index);
 }
 

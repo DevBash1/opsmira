@@ -25,7 +25,8 @@ export function buildLastTurn(conversation, proposals) {
   if (start < 0) return null;
   const first = conversation[start];
   const turn = {
-    ask: contentText(first.content),
+    ask: typeof first.shown === "string" ? first.shown : contentText(first.content),
+    ...(first.from ? { from: first.from } : {}),
     images: contentImages(first.content),
     steers: [],
     thoughts: [],
@@ -121,5 +122,5 @@ export function rewindLast(conversation) {
       if (result?.status === "awaiting_approval" && result.id) droppedProposals.push(result.id);
     }
   }
-  return { ask: { text: contentText(first.content), images: contentImages(first.content) }, ran, droppedProposals };
+  return { ask: { text: typeof first.shown === "string" ? first.shown : contentText(first.content), images: contentImages(first.content) }, ran, droppedProposals };
 }

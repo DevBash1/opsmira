@@ -48,6 +48,13 @@ Every command a client runs, directly or through Opsmira's agent, is in **Activi
 with the client's name. Conversations a client starts show up in **History**, titled with the client's name, so you
 can follow them and approve what they propose.
 
+You can watch a client's conversation live. While a client is waiting on Opsmira, the console shows the work as it
+happens: the client's message (labelled with its name), each command and its output, and the reply. A console with
+nothing else on screen follows it on its own. Otherwise a "<client> is asking" pill over the message box opens it,
+and History marks it LIVE. While you watch, the message box sends guidance that the agent picks up at its next step,
+and Stop ends the turn. The client is then told its turn was `stopped`. Closing the tab only stops watching: the
+client still gets its answer.
+
 ## Tools
 
 - **`opsmira_list_servers`**: the machine Opsmira runs on (`local`) and every connected server (`agent:<name>`):
@@ -62,7 +69,7 @@ can follow them and approve what they propose.
   waiting for your approval. It waits up to `wait_seconds` (default 50, at most 90, under what proxies such as
   Cloudflare allow a request); if it is still working, the result says `working`.
 - **`opsmira_get_reply`** `{ conversation_id, wait_seconds? }`: waits for the rest of a `working` answer, or reads where
-  a conversation stands.
+  a conversation stands: `working`, `done`, `waiting_for_approval`, `stopped` or `error`.
 - **`opsmira_stop`** `{ conversation_id }`: stops Opsmira's agent in that conversation, like the Stop button.
 
 Pass `conversation_id` back to `opsmira_ask` to continue a conversation. Opsmira's agent answers with the model you

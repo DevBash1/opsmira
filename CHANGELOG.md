@@ -13,6 +13,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
   is audited and the conversations show in History. Claude on the web, Desktop and mobile connect with just the URL:
   the console signs them in with OAuth 2.1 (discovery, Client ID Metadata Documents or Dynamic Client Registration,
   PKCE, an approval page where you choose the access, rotating refresh tokens). See docs/mcp.md.
+- Watch MCP clients live: while a client waits on Opsmira, the console shows its message (under its name), each
+  command and the reply as they happen. A console with nothing else on screen follows it on its own; otherwise a
+  "<client> is asking" pill opens it, and History marks it LIVE. You can steer or stop it like your own turn, and
+  the client is told when it was stopped.
 - Servers can ask to join: an agent started without a token (or with a used one) shows up under Connect a server
   with its hostname, address and requested access. Accept pairs it; Decline makes it uninstall itself. Requests
   never expire; they are capped and rate limited per address. Install tokens work once and no longer expire.

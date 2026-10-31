@@ -30,7 +30,7 @@ import { startSampler } from "./metrics.js";
 import { knownHosts } from "./machine.js";
 import { checkForUpdate, updateStatus } from "./update.js";
 import { listDetached, startDetached, tellDetached } from "./detach.js";
-import { MCP_PATH, createMcpToken, handleMcp, listMcpTokens, revokeMcpToken } from "./mcp.js";
+import { MCP_PATH, createMcpToken, handleMcp, listMcpTokens, liveTurns, revokeMcpToken, watchTurn } from "./mcp.js";
 import { mountOAuth } from "./oauth.js";
 import { AGENT_PATH, acceptRequest, attachAgentGateway, createAgentCredential, createPairingToken, declineRequest, listAgents, listRequests, revokeAgent } from "./agents.js";
 import { collectSurface, surfaceList } from "./surfaces.js";
@@ -110,9 +110,58 @@ app.get("/api/history", (req, res) => {
   });
 });
 
-/** Past conversations, newest first, for the History menu. */
+/** Past conversations, newest first, for the History menu. An MCP client's are named for it, and marked while it runs. */
 app.get("/api/conversations", (req, res) => {
-  res.json({ conversations: listConversations(), current: conversationIdFromRequest(req) ?? null });
+  const clients = new Map(listMcpTokens().map((t) => [`mcp:${t.id}`, t.name]));
+  const live = new Set(liveTurns().map((t) => t.conversationId));
+  const conversations = listConversations().map(({ via, ...c }) => ({
+    ...c,
+    ...(via?.startsWith("mcp:") ? { client: clients.get(via) ?? "MCP client" } : {}),
+    ...(live.has(c.id) ? { live: true } : {}),
+  }));
+  res.json({ conversations, current: conversationIdFromRequest(req) ?? null });
+});
+
+/** What MCP clients are asking Opsmira right now. The console polls this to offer (or follow) them live. */
+app.get("/api/live", (req, res) => {
+  res.json({ turns: liveTurns() });
+});
+
+/**
+ * A running MCP turn as it happens: a snapshot of what it has done so far, then each event, then done.
+ * The owner closing the tab only stops watching; the turn goes on for its client.
+ */
+app.get("/api/conversations/:id/live", (req, res) => {
+  if (!CONVERSATION_ID.test(req.params.id)) {
+    res.status(400).json({ error: "Invalid conversation id" });
+    return;
+  }
+  const send = (event) => {
+    if (!res.writableEnded && !res.destroyed) res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+  let keepAlive;
+  const watch = watchTurn(req.params.id, (event) => {
+    send(event);
+    if (event.type !== "done") return;
+    clearInterval(keepAlive);
+    res.end();
+  });
+  if (!watch) {
+    res.status(404).json({ error: "Nothing is running in that conversation now." });
+    return;
+  }
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+  send({ type: "snapshot", ...watch.snapshot });
+  keepAlive = setInterval(() => {
+    if (!res.writableEnded && !res.destroyed) res.write(": ping\n\n");
+  }, 15000);
+  res.on("close", () => {
+    clearInterval(keepAlive);
+    watch.stop();
+  });
 });
 
 app.delete("/api/conversations/:id", (req, res) => {

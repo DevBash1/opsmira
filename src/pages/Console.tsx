@@ -38,6 +38,7 @@ import {
   type SurfaceInfo,
   type ChatEvent,
   type ConversationSummary,
+  type LiveTurn,
   type MemoryNote,
   type ModelInfo,
   type Proposal,
@@ -97,6 +98,8 @@ type Turn = {
   offlineAt?: string;
   stopped?: boolean;
   scene?: SceneCall;
+  /** The MCP client that asked, when it was not the owner. */
+  from?: string;
 };
 
 const emptyTurn = (ask: string, images: string[] = []): Turn => ({
@@ -131,6 +134,7 @@ function turnFromServer(t: ServerTurn): Turn {
     tasks: t.tasks ?? [],
     stopped: t.stopped,
     scene: t.scene,
+    from: t.from,
   };
 }
 
@@ -568,14 +572,20 @@ function ImageStrip({ images, size = 64 }: { images: string[]; size?: number }) 
   );
 }
 
-/** What the owner sent: the ask, or guidance that reached the agent mid-turn (`steered`). */
-function AskLine({ text, images, steered = false }: { text: string; images: string[]; steered?: boolean }) {
+/** What the owner sent (or an MCP client, `from`): the ask, or guidance that reached the agent mid-turn (`steered`). */
+function AskLine({ text, images, steered = false, from }: { text: string; images: string[]; steered?: boolean; from?: string }) {
   return (
     <div className="flex w-full flex-col items-start gap-[8px] pl-[19px] motion-safe:animate-blur-rise">
       {(text || steered) && (
         <div className="font-code -ml-[19px] flex w-full flex-row items-start gap-[8px] text-[12px] text-[var(--muted)]">
           <Icon name="corner-down-right" className="mt-[2px] h-[11px] w-[11px] shrink-0" />
           <span className="min-w-0 flex-1">
+            {from && (
+              <span className="mr-[8px] inline-flex flex-row items-center gap-[5px] rounded-full bg-[var(--soft)] px-[7px] py-[1px] align-[1px] text-[9px] tracking-[0.5px] text-[var(--accent-2)]">
+                <Icon name="orbit" className="h-[9px] w-[9px] shrink-0" />
+                {from.toUpperCase()} · MCP
+              </span>
+            )}
             {text || "Image"}
             {steered && (
               <span className="ml-[8px] inline-flex rounded-full bg-[var(--soft)] px-[7px] py-[1px] align-[1px] text-[9px] tracking-[0.5px] text-[var(--accent-strong)]">
@@ -617,7 +627,7 @@ function TurnBlock({
 
   return (
     <div className="flex w-full shrink-0 flex-col items-start gap-[16px] p-[20px_0px]">
-      {(turn.ask || turn.images.length > 0) && <AskLine text={turn.ask} images={turn.images} />}
+      {(turn.ask || turn.images.length > 0) && <AskLine text={turn.ask} images={turn.images} from={turn.from} />}
       {turn.steers
         .filter((s) => s.state === "delivered")
         .map((s) => (
@@ -963,6 +973,9 @@ function ConsoleApp({
   const [openedArtifact, setOpenedArtifact] = useState<Artifact | null>(null);
   const [copiedArtifact, setCopiedArtifact] = useState(false);
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
+  // What MCP clients are asking right now, and whether this tab is following one of them live.
+  const [liveTurns, setLiveTurns] = useState<LiveTurn[]>([]);
+  const [watching, setWatching] = useState(false);
   const [memories, setMemories] = useState<MemoryNote[] | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busyProposal, setBusyProposal] = useState<string | null>(null);
@@ -998,6 +1011,10 @@ function ConsoleApp({
   // Mirrors of in-flight state for callbacks that outlive a render (follow-ups, stop fallback).
   const sendingRef = useRef(false);
   const busyRef = useRef(false);
+  const watchingRef = useRef(false);
+  const watchAbort = useRef<AbortController | null>(null);
+  // Live conversations the owner left: not followed again on their own (the banner still offers them).
+  const leftLive = useRef(new Set<string>());
   const streamAbort = useRef<AbortController | null>(null);
   const stopTimer = useRef<number | undefined>(undefined);
   // Guidance that arrived just as a turn ended: sent as the next message once it has.
@@ -1058,6 +1075,8 @@ function ConsoleApp({
         const base = next ?? emptyTurn("");
         next = { ...base, proposals: [...base.proposals, ...r.pending] };
       }
+      // A live turn being followed is newer than what was saved when it started.
+      if (watchingRef.current) return;
       sentImages.current = !!next && (next.images.length > 0 || next.steers.some((x) => x.images.length > 0));
       setCurrent(next);
     } catch {
@@ -1100,7 +1119,7 @@ function ConsoleApp({
       ? "error"
       : busyProposal || (status && status !== "thinking")
         ? "working"
-        : sending
+        : sending || watching
           ? "thinking"
           : pendingApproval
             ? "approval"
@@ -1121,6 +1140,14 @@ function ConsoleApp({
     const t = window.setInterval(read, 20000);
     return () => window.clearInterval(t);
   }, [noteTasks]);
+
+  // What MCP clients are asking right now.
+  useEffect(() => {
+    const read = () => document.visibilityState === "visible" && api.live().then((r) => setLiveTurns(r.turns)).catch(() => {});
+    read();
+    const t = window.setInterval(read, 3000);
+    return () => window.clearInterval(t);
+  }, []);
 
   /** One top-bar sheet open at a time. History, Memory and Artifacts fetch fresh data each time they open. */
   const togglePanel = (panel: "scenes" | "audit" | "history" | "memory" | "artifacts" | "tasks") => {
@@ -1283,11 +1310,16 @@ function ConsoleApp({
   const modelInfo = models.find((m) => m.id === model);
   const canSeeImages = !!modelInfo?.vision;
   const modelName = (model.split("/").pop() || model).replace(/:free$/, "");
-  const running = sending || !!busyProposal;
+  // The owner's own turn (or an approval) is in flight; `running` also counts a client's turn being followed live,
+  // which the owner can steer and stop like their own.
+  const ownTurn = sending || !!busyProposal;
+  const running = ownTurn || watching;
 
   const send = async (text: string, images: string[] = []) => {
     text = text.trim();
     if ((!text && !images.length) || sendingRef.current) return;
+    // A client's turn is on screen: what the owner types goes to it as guidance.
+    if (watchingRef.current) return steer(text, images);
     sendingRef.current = true;
     setInput("");
     setAttachments([]);
@@ -1506,8 +1538,102 @@ function ConsoleApp({
     }
   };
 
+  /** Stop following a client's turn on screen (it goes on for the client). */
+  const stopWatching = () => {
+    if (watchingRef.current) leftLive.current.add(currentConversationId());
+    watchAbort.current?.abort();
+    watchAbort.current = null;
+    watchingRef.current = false;
+    setWatching(false);
+    setStatus("");
+    setStopping(false);
+  };
+
+  /** Follow an MCP client's running turn: everything it has done so far at once, then each step as it happens. */
+  const watchConversation = async (id: string) => {
+    if (sendingRef.current || busyRef.current) return;
+    if (watchingRef.current && id === currentConversationId()) return;
+    stopWatching();
+    leftLive.current.delete(id);
+    setShowHistory(false);
+    if (id !== currentConversationId()) {
+      switchConversation(id);
+      reset();
+      sentImages.current = false;
+      followUp.current = null;
+      setPreview(null);
+      setInput("");
+      setAttachments([]);
+      setActionError("");
+    }
+    const controller = new AbortController();
+    watchAbort.current = controller;
+    watchingRef.current = true;
+    setWatching(true);
+    setHistoryReady(true);
+    let turnId = "";
+    try {
+      await api.watch(
+        id,
+        (event) => {
+          if (event.type === "snapshot") {
+            let turn: Turn = { ...emptyTurn(event.ask), from: event.client };
+            let lastStatus = "";
+            for (const e of event.events) {
+              if (e.type === "status") lastStatus = e.text;
+              else if (e.type !== "done") turn = applyEvent(turn, e);
+            }
+            turnId = turn.id;
+            setCurrent(turn);
+            setStatus(lastStatus);
+            return;
+          }
+          if (event.type === "status") {
+            setStatus(event.text);
+            return;
+          }
+          if (event.type === "done") return;
+          if (event.type === "steer") deliveredSteers.current.add(event.id);
+          if (event.type === "stopped") restoreDropped(turnId);
+          setCurrent((t) => (t && t.id === turnId ? applyEvent(t, event) : t));
+        },
+        controller.signal,
+      );
+    } catch {
+      // It had just ended, or the stream dropped: the saved conversation below is what happened, and the next
+      // look at what is live follows it again if it is still running.
+    } finally {
+      if (watchAbort.current === controller) {
+        watchAbort.current = null;
+        watchingRef.current = false;
+        window.clearTimeout(stopTimer.current);
+        setWatching(false);
+        setStatus("");
+        setStopping(false);
+        setLiveTurns((list) => list.filter((t) => t.conversationId !== id));
+        await loadHistory();
+        refreshAudit();
+      }
+    }
+  };
+
+  // A client's turn in this conversation is followed as it runs; and while the console has nothing else on
+  // screen, it follows whichever one is running (unless the owner already left it).
+  useEffect(() => {
+    if (watching || ownTurn || !historyReady) return;
+    const here = currentConversationId();
+    const blank = !current && !preview && !input.trim() && !attachments.length;
+    const next =
+      liveTurns.find((t) => t.conversationId === here && !leftLive.current.has(here)) ??
+      (blank ? liveTurns.find((t) => !leftLive.current.has(t.conversationId)) : undefined);
+    if (next) watchConversation(next.conversationId);
+    // Following starts from what is live and what is on screen; watchConversation itself is not a reason to re-run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTurns, watching, ownTurn, historyReady, current, preview, input, attachments.length]);
+
   const startNewConversation = () => {
     if (sending || busyProposal) return;
+    stopWatching();
     resetConversation();
     reset();
     sentImages.current = false;
@@ -1522,9 +1648,15 @@ function ConsoleApp({
 
   /** Reopen a past conversation from History. */
   const openConversation = async (id: string) => {
-    if (running) return;
+    if (ownTurn) return;
     setShowHistory(false);
+    leftLive.current.delete(id);
+    if (liveTurns.some((t) => t.conversationId === id) || conversations?.find((c) => c.id === id)?.live) {
+      watchConversation(id);
+      return;
+    }
     if (id === currentConversationId()) return;
+    stopWatching();
     switchConversation(id);
     reset();
     sentImages.current = false;
@@ -1594,6 +1726,10 @@ function ConsoleApp({
 
   const rewind = () => {
     if (rewinding.current || !current) return;
+    if (watching) {
+      showHint(`This is ${current.from ?? "a client"}'s turn. Stop it first to take it back.`);
+      return;
+    }
     if (running) {
       pendingRewind.current = true;
       if (!stopping) stop();
@@ -1625,7 +1761,7 @@ function ConsoleApp({
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const presence = stopping ? "stopping" : busyProposal ? "finishing" : status || (sending ? "thinking" : "");
+  const presence = stopping ? "stopping" : busyProposal ? "finishing" : status || (sending || watching ? "thinking" : "");
   // "!" first: the rest is a command to run as typed on the selected server; the agent then reads the result.
   const commandMode = !running && input.startsWith("!");
   const commandText = commandMode ? input.slice(1).trim() : "";
@@ -1633,6 +1769,9 @@ function ConsoleApp({
   // While the agent works, the send button is the Stop button until guidance is typed.
   const stopMode = running && (stopping || !canSend);
   const queuedSteers = current?.steers.filter((s) => s.state !== "delivered") ?? [];
+  // Client turns running in other conversations, newest first.
+  const elsewhere = liveTurns.filter((t) => t.conversationId !== currentConversationId()).reverse();
+  const elsewhereLive = elsewhere[0];
   const previewMeta = preview ? surfaces?.find((x) => x.id === preview) : undefined;
 
   const stageKey = preview ? `p:${preview}` : !historyReady ? "loading" : (current?.id ?? "idle");
@@ -1764,21 +1903,28 @@ function ConsoleApp({
                     >
                       <button
                         type="button"
-                        disabled={running}
+                        disabled={ownTurn}
                         onClick={() => openConversation(c.id)}
                         className="flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-[1px] p-[7px_4px_7px_10px] text-left disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <span className="flex w-full min-w-0 flex-row items-center gap-[7px]">
                           {active && <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-[var(--accent)] [box-shadow:0px_0px_6px_var(--glow)]" />}
                           <span className="min-w-0 truncate text-[12.5px] text-[var(--ink)]">{c.title}</span>
+                          {c.live && (
+                            <span className="font-code flex shrink-0 flex-row items-center gap-[5px] text-[9.5px] tracking-[0.5px] text-[var(--accent-strong)]">
+                              <span className="h-[5px] w-[5px] rounded-full bg-[var(--accent)] motion-safe:animate-[dot-pulse_1.4s_ease-in-out_infinite]" />
+                              LIVE
+                            </span>
+                          )}
                         </span>
                         <span className="text-[10.5px] text-[var(--muted)]">
+                          {c.client ? `${c.client} via MCP · ` : ""}
                           {c.messages} message{c.messages === 1 ? "" : "s"} · {timeAgo(c.updatedAt)}
                         </span>
                       </button>
                       <button
                         type="button"
-                        disabled={running && active}
+                        disabled={(running && active) || !!c.live}
                         aria-label={`Delete "${c.title}"`}
                         onClick={() => removeConversation(c.id)}
                         className="mr-[6px] flex h-[26px] w-[26px] shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--muted)] transition-[opacity,color,background-color] duration-150 ease-enter hover:bg-[var(--surface)] hover:text-[var(--danger)] focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-30 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100"
@@ -2070,6 +2216,32 @@ function ConsoleApp({
       </div>
 
       <div className="relative z-10 flex w-full shrink-0 flex-col items-center p-[12px_16px_20px_16px] sm:p-[12px_20px_24px_20px]">
+        {/* An MCP client asking Opsmira something in another conversation: one tap follows it live. */}
+        <AnimatePresence initial={false}>
+          {elsewhereLive && !preview && (
+            <motion.div key="live" {...collapseY(reduce, { blur: true })} className="flex w-full max-w-[800px] justify-center">
+              <div className="max-w-full pb-[10px]">
+                <button
+                  type="button"
+                  disabled={ownTurn}
+                  onClick={() => watchConversation(elsewhereLive.conversationId)}
+                  title={ownTurn ? "Available when your own turn finishes" : "Watch it live"}
+                  className="glass flex max-w-full min-w-0 cursor-pointer flex-row items-center gap-[8px] rounded-full p-[6px_12px_6px_10px] text-[12px] transition-[background-color,scale] duration-200 ease-enter hover:bg-[var(--surface)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 [outline:1px_solid_var(--hairline)] [outline-offset:-0.5px]"
+                >
+                  <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-[var(--accent)] motion-safe:animate-[dot-pulse_1.4s_ease-in-out_infinite]" />
+                  <span className="shrink-0 font-medium text-[var(--ink)]">{elsewhereLive.client} is asking</span>
+                  <span className="min-w-0 truncate text-[var(--muted)]">{elsewhereLive.ask}</span>
+                  {elsewhere.length > 1 && <span className="font-code shrink-0 text-[10px] text-[var(--muted)]">+{elsewhere.length - 1}</span>}
+                  <span className="font-code flex shrink-0 flex-row items-center gap-[4px] text-[9.5px] tracking-[0.5px] text-[var(--accent-strong)]">
+                    <Icon name="eye" className="h-[11px] w-[11px]" />
+                    WATCH
+                  </span>
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Guidance waiting for the agent's next step. It leaves this tray once delivered and
             appears in the turn above. */}
         <div className="flex w-full max-w-[800px] flex-col items-end">
