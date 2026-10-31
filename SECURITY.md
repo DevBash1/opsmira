@@ -17,6 +17,9 @@ operating-system user it runs under. That is the product, and also the risk.
 - A detached run (docs/detach.md) sends the model API key to that server for the length of the run and runs its
   commands without approving each one. It always needs your approval, every command lands in the audit log, and
   the key is deleted when the run ends.
+- MCP tokens (docs/mcp.md) act for you within their access: an "ask first" token reads and runs read-only commands,
+  a "full access" one can run anything on every connected server that allows commands. Only you can approve a
+  proposed change, from the console. Revoke tokens you no longer use.
 - Anyone who can reach the console can ask to connect a server. Requests are capped and rate limited, and nothing
   is connected until you accept it.
 

@@ -174,7 +174,7 @@ export function pickServer(raw, defaultServer = env.defaultServer) {
  * The connected server a call targets: { name } (or {} for this server), or { error } to hand back to the model.
  * Commands only run on a server that is online and was started to allow commands.
  */
-function targetServer(asked, dflt) {
+export function targetServer(asked, dflt) {
   const raw = pickServer(asked, dflt);
   if (!raw) return {};
   const host = typeof raw === "string" ? raw.trim() : "";

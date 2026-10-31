@@ -62,6 +62,7 @@ copied one-liner does what you think. Opsmira puts a conversation in front of th
 | **Any server** | Manage other hosts over SSH, or have a server connect itself with one command: no SSH keys, no open port. [Details](docs/self-hosting.md#connect-a-server-without-ssh-agent). |
 | **Works on its own** | Ask for a task: a schedule ("check disks every morning") or a trigger ("tell me if nginx.conf changes", "if memory passes 90%"). It wakes, looks into it, and asks before changing anything. [Details](docs/tasks.md). |
 | **Changes that take the console down** | Upgrading the proxy in front of Opsmira, or Opsmira itself, runs detached on that server: it works on its own, you follow it with `opsmira watch` there, and it reports back. [Details](docs/detach.md). |
+| **Other AI agents (MCP)** | Connect Claude Code, Cursor or your own agent: it can ask Opsmira to do something and get the answer, or read and run commands on your servers directly, with a token you make and can revoke. [Details](docs/mcp.md). |
 | **Your own commands** | Start a message with `!` (`!df -h`) to run a command yourself on the selected server. The agent sees the command and its output and picks up from there. |
 | **Agent-composed views** | For data no built-in surface covers, the agent builds a view from stats, tables, charts, logs and key-values, and says where the data came from. |
 | **Memory and artifacts** | It remembers facts about your servers and keeps notes you can reopen. |

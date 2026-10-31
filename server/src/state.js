@@ -31,7 +31,8 @@ function withoutImages(message) {
 function blank(id) {
   // `run` is the turn in flight ({ abort, steers, vision }); one at a time per conversation.
   // `title` is the model-written name (null until it has one); `titledAt` is how many owner messages there were then.
-  return { id, conversation: [], pendingApprovals: new Map(), run: null, lastModel: undefined, title: null, titledAt: 0, titleTriedAt: 0, createdAt: new Date().toISOString() };
+  // `via` is who started it when that was not the owner in the console ("mcp:<token id>" for an MCP client).
+  return { id, conversation: [], pendingApprovals: new Map(), run: null, lastModel: undefined, title: null, titledAt: 0, titleTriedAt: 0, createdAt: new Date().toISOString(), via: null };
 }
 
 function revive(id, saved) {
@@ -44,6 +45,7 @@ function revive(id, saved) {
     session.titledAt = saved.titledAt;
   }
   session.createdAt = saved.createdAt ?? session.createdAt;
+  session.via = saved.via ?? null;
   return session;
 }
 
@@ -82,6 +84,7 @@ export function persistSession(session) {
     updatedAt,
     messages: session.conversation.filter((m) => m.role === "user" && m.ask).length,
     lastModel: session.lastModel,
+    via: session.via || undefined,
     conversation: session.conversation.map(withoutImages),
     proposals: [...session.pendingApprovals.values()],
   });

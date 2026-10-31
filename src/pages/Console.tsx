@@ -8,6 +8,7 @@ import { SceneView } from "../components/console/scenes";
 import { DestructiveScene, DetachScene, OfflineScene, PermissionScene } from "../components/console/scenes/StateScenes";
 import { Aurora, type AuroraMood } from "../components/console/Aurora";
 import { ConnectServer } from "../components/console/ConnectServer";
+import { ConnectMcp } from "../components/console/ConnectMcp";
 import { IconButton } from "../components/console/IconButton";
 import { ModelChip } from "../components/console/ModelChip";
 import { ModeChip } from "../components/console/ModeChip";
@@ -1967,6 +1968,7 @@ function ConsoleApp({
                 api.hosts().then((r) => setKnownHosts(r.hosts)).catch(() => {});
               }}
             />
+            <ConnectMcp />
             <div className="grid w-full grid-cols-1 gap-[2px] sm:grid-cols-2 lg:grid-cols-3">
               {surfaces?.map((scene, i) => (
                 <button

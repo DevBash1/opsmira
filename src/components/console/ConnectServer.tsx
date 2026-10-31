@@ -24,7 +24,7 @@ function Joined({ name }: { name: string }) {
   );
 }
 
-function CodeLine({ text, copied, onCopy }: { text: string; copied: boolean; onCopy: () => void }) {
+export function CodeLine({ text, copied, onCopy }: { text: string; copied: boolean; onCopy: () => void }) {
   return (
     <div className="flex flex-row items-start gap-[8px]">
       <code className="font-code max-h-[84px] min-w-0 flex-1 overflow-auto rounded-[8px] bg-[var(--surface)] p-[8px] text-[10.5px] leading-[1.55] break-all text-[var(--ink)]">{text}</code>
@@ -40,7 +40,7 @@ function CodeLine({ text, copied, onCopy }: { text: string; copied: boolean; onC
   );
 }
 
-function Choice<T extends string>({ value, options, onChange }: { value: T; options: { id: T; label: string }[]; onChange: (v: T) => void }) {
+export function Choice<T extends string>({ value, options, onChange }: { value: T; options: { id: T; label: string }[]; onChange: (v: T) => void }) {
   return (
     <div role="radiogroup" className="flex flex-row gap-[4px] rounded-[10px] bg-[var(--soft)] p-[3px]">
       {options.map((o) => (

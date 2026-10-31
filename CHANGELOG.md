@@ -6,6 +6,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- MCP server: other AI agents (Claude Code, Claude Desktop, Cursor...) connect at `/mcp` with a token made under
+  Surfaces → Connect an AI agent. They can list servers, read live surfaces, run commands directly on a server, or
+  ask Opsmira's own agent and get its reply (long answers through `opsmira_get_reply`). "Ask first" tokens run only
+  read-only commands and Opsmira's changes wait for your approval; "Full access" tokens may run anything. Everything
+  is audited and the conversations show in History. Claude on the web, Desktop and mobile connect with just the URL:
+  the console signs them in with OAuth 2.1 (discovery, Client ID Metadata Documents or Dynamic Client Registration,
+  PKCE, an approval page where you choose the access, rotating refresh tokens). See docs/mcp.md.
 - Servers can ask to join: an agent started without a token (or with a used one) shows up under Connect a server
   with its hostname, address and requested access. Accept pairs it; Decline makes it uninstall itself. Requests
   never expire; they are capped and rate limited per address. Install tokens work once and no longer expire.

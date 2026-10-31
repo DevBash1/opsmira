@@ -242,6 +242,19 @@ export type UpdateStatus = {
   enabled: boolean;
 };
 
+/** A token an MCP client (Claude Code, Cursor, another agent) uses to reach this console. Never shown again after it is made. */
+export type McpToken = {
+  id: string;
+  name: string;
+  access: "ask" | "full";
+  /** "token": made here and pasted into the client; "oauth": the client signed in through the console (claude.ai). */
+  kind: "token" | "oauth";
+  /** For a sign-in: where it went back to (claude.ai, or localhost for Claude Code). */
+  redirectHost: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+};
+
 /** A server that connected without a usable token and waits for the owner to accept or decline it. */
 export type JoinRequest = {
   id: string;
@@ -293,6 +306,10 @@ export const api = {
   agents: () => fetch("/api/agents").then((r) => json<{ agents: AgentInfo[]; requests?: JoinRequest[]; defaultServer?: string }>(r)),
   agentToken: (options: { os: "linux" | "windows"; access: "read-only" | "operate" }) =>
     post("/api/agents/token", options).then((r) => json<{ token: string; command: string; manual: string }>(r)),
+  mcpTokens: () => fetch("/api/mcp/tokens").then((r) => json<{ tokens: McpToken[] }>(r)),
+  createMcpToken: (options: { name: string; access: "ask" | "full" }) =>
+    post("/api/mcp/tokens", options).then((r) => json<McpToken & { token: string; url: string; clients: { claudeCode: string; json: string } }>(r)),
+  revokeMcpToken: (id: string) => fetch(`/api/mcp/tokens/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers() }).then((r) => json<{ ok: true }>(r)),
   update: () => fetch("/api/update").then((r) => json<UpdateStatus>(r)),
   answerJoin: (id: string, answer: "accept" | "decline") => post(`/api/agents/requests/${encodeURIComponent(id)}/${answer}`, {}).then((r) => json<{ ok: true }>(r)),
   agentCredential: (options: { name: string; access: "read-only" | "operate" }) =>

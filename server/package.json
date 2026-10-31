@@ -19,5 +19,8 @@
   "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1"
   }
 }

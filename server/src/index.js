@@ -30,6 +30,8 @@ import { startSampler } from "./metrics.js";
 import { knownHosts } from "./machine.js";
 import { checkForUpdate, updateStatus } from "./update.js";
 import { listDetached, startDetached, tellDetached } from "./detach.js";
+import { MCP_PATH, createMcpToken, handleMcp, listMcpTokens, revokeMcpToken } from "./mcp.js";
+import { mountOAuth } from "./oauth.js";
 import { AGENT_PATH, acceptRequest, attachAgentGateway, createAgentCredential, createPairingToken, declineRequest, listAgents, listRequests, revokeAgent } from "./agents.js";
 import { collectSurface, surfaceList } from "./surfaces.js";
 
@@ -47,6 +49,11 @@ function conversationIdFromRequest(req) {
   const id = req.get("x-opsmira-conversation");
   return typeof id === "string" && CONVERSATION_ID.test(id) ? id : undefined;
 }
+
+// MCP (docs/mcp.md): other AI agents connect here with a token made in the console (Bearer auth, not the cookie).
+app.all(MCP_PATH, handleMcp);
+// Sign-in for MCP clients that cannot send a header (claude.ai, Claude Desktop): discovery, registration, approval, tokens.
+mountOAuth(app);
 
 // The agent program itself. Public on purpose: it is only code. What authorizes an agent is the token.
 const AGENT_FILES = { "opsmira-agent.mjs": "text/javascript", "install.sh": "text/plain", "install.ps1": "text/plain" };
@@ -189,6 +196,31 @@ app.get("/api/update", (req, res) => {
 app.post("/api/update/check", async (req, res) => {
   await checkForUpdate();
   res.json(updateStatus());
+});
+
+/** Tokens for MCP clients: listed (never the token itself), made (shown once, with ready-made client settings), revoked. */
+app.get("/api/mcp/tokens", (req, res) => {
+  res.json({ tokens: listMcpTokens() });
+});
+app.post("/api/mcp/tokens", (req, res) => {
+  const made = createMcpToken({ name: req.body?.name, access: req.body?.access });
+  const url = `${req.protocol}://${req.get("host")}${MCP_PATH}`;
+  const header = `Authorization: Bearer ${made.token}`;
+  res.json({
+    ...made,
+    url,
+    clients: {
+      claudeCode: `claude mcp add --transport http opsmira ${url} --header "${header}"`,
+      json: JSON.stringify({ mcpServers: { opsmira: { type: "http", url, headers: { Authorization: `Bearer ${made.token}` } } } }, null, 2),
+    },
+  });
+});
+app.delete("/api/mcp/tokens/:id", (req, res) => {
+  if (!revokeMcpToken(req.params.id)) {
+    res.status(404).json({ error: "No such token" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 /** Jobs handed to a server to run on its own (detach), newest first; and a message or a stop for one. */
