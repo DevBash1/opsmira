@@ -1,0 +1,15 @@
+{
+ "drone": 1.6,
+ "whoosh_b": 0.32,
+ "ping_soft": 3.92,
+ "gauge": 5.17,
+ "dial": 5.42,
+ "wake": 1.95,
+ "mark_draw": 0.4,
+ "key_enter": 1.0,
+ "key_space": 2.7,
+ "key_a": 0.6,
+ "key_b": 2.54,
+ "key_c": 0.48,
+ "key_d": 0.95
+}

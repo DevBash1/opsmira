@@ -1,0 +1,171 @@
+{
+ "chatter": {
+  "active_db": -28.85,
+  "peak_s": 0.8816,
+  "len_s": 3.4
+ },
+ "drone": {
+  "active_db": -12.8,
+  "peak_s": 1.2658,
+  "len_s": 3.8005
+ },
+ "impact": {
+  "active_db": -13.71,
+  "peak_s": 0.0475,
+  "len_s": 2.2473
+ },
+ "glass_in": {
+  "active_db": -17.57,
+  "peak_s": 0.1896,
+  "len_s": 1.6324
+ },
+ "exhale": {
+  "active_db": -16.55,
+  "peak_s": 0.6348,
+  "len_s": 3.8825
+ },
+ "whoosh_a": {
+  "active_db": -18.2,
+  "peak_s": 0.3958,
+  "len_s": 1.897
+ },
+ "whoosh_b": {
+  "active_db": -17.79,
+  "peak_s": 0.4017,
+  "len_s": 1.847
+ },
+ "whoosh_c": {
+  "active_db": -18.18,
+  "peak_s": 0.4835,
+  "len_s": 2.147
+ },
+ "whoosh_small": {
+  "active_db": -19.9,
+  "peak_s": 0.2531,
+  "len_s": 1.547
+ },
+ "ping_soft": {
+  "active_db": -12.81,
+  "peak_s": 0.0146,
+  "len_s": 3.4224
+ },
+ "click": {
+  "active_db": -21.69,
+  "peak_s": 0.0101,
+  "len_s": 0.16
+ },
+ "pop": {
+  "active_db": -13.37,
+  "peak_s": 0.0117,
+  "len_s": 0.807
+ },
+ "tick": {
+  "active_db": -16.04,
+  "peak_s": 0.0105,
+  "len_s": 0.09
+ },
+ "tick_up": {
+  "active_db": -14.78,
+  "peak_s": 0.0106,
+  "len_s": 0.16
+ },
+ "audit_tick": {
+  "active_db": -16.62,
+  "peak_s": 0.0101,
+  "len_s": 0.1
+ },
+ "gauge": {
+  "active_db": -13.6,
+  "peak_s": 0.5464,
+  "len_s": 2.6474
+ },
+ "approve": {
+  "active_db": -17.07,
+  "peak_s": 0.0808,
+  "len_s": 4.8824
+ },
+ "dial": {
+  "active_db": -15.34,
+  "peak_s": 0.2589,
+  "len_s": 3.177
+ },
+ "arrive": {
+  "active_db": -16.7,
+  "peak_s": 0.1148,
+  "len_s": 4.2824
+ },
+ "strike": {
+  "active_db": -19.36,
+  "peak_s": 0.0123,
+  "len_s": 0.3404
+ },
+ "wake": {
+  "active_db": -13.03,
+  "peak_s": 0.1395,
+  "len_s": 2.0624
+ },
+ "bloom_low": {
+  "active_db": -13.32,
+  "peak_s": 1.9807,
+  "len_s": 5.9125
+ },
+ "mark_draw": {
+  "active_db": -17.73,
+  "peak_s": 0.9878,
+  "len_s": 3.5224
+ },
+ "chime": {
+  "active_db": -17.84,
+  "peak_s": 0.3916,
+  "len_s": 9.2326
+ },
+ "key_a": {
+  "active_db": -16.73,
+  "peak_s": 0.0106,
+  "len_s": 0.11
+ },
+ "key_b": {
+  "active_db": -17.07,
+  "peak_s": 0.0105,
+  "len_s": 0.11
+ },
+ "key_c": {
+  "active_db": -15.51,
+  "peak_s": 0.0105,
+  "len_s": 0.11
+ },
+ "key_d": {
+  "active_db": -16.94,
+  "peak_s": 0.0103,
+  "len_s": 0.11
+ },
+ "key_space": {
+  "active_db": -14.51,
+  "peak_s": 0.0108,
+  "len_s": 0.14
+ },
+ "key_enter": {
+  "active_db": -17.17,
+  "peak_s": 0.0103,
+  "len_s": 0.18
+ },
+ "risk_ticks": {
+  "active_db": -14.53,
+  "peak_s": 0.2709,
+  "len_s": 1.087,
+  "ticks": [
+   [
+    0.0029,
+    0.725
+   ],
+   [
+    0.1331,
+    0.856
+   ],
+   [
+    0.2631,
+    1.0
+   ]
+  ]
+ }
+}

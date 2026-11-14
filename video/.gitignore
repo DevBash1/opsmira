@@ -1,0 +1,8 @@
+node_modules/
+out/
+.env*
+*.log
+public/audio/
+public/music/*.wav
+public/sfx/*.wav
+__pycache__/

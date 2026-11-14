@@ -1,0 +1,118 @@
+{
+  "model": "gpt-4o-mini-tts",
+  "voice": "cedar",
+  "transcribeModel": "whisper-1",
+  "asrHints": "Opsmira, nginx, SSH, audit log, read-only, self-host, open source",
+  "base": "Voice affect: calm, assured and warm, like a senior engineer explaining something to a colleague who has very little time. Tone: plain and concrete, with a slight smile, never salesy. Pacing: steady and unhurried but not slow, a natural conversational rhythm, with brief pauses at commas and between short phrases. Emphasis: lightly stress the key word of each phrase, nothing dramatic. Delivery: no announcer or ad-read energy, no rising selling intonation, end each sentence with a natural settled fall. Keep the volume even and the diction clear.",
+  "lines": [
+    {
+      "id": "h1",
+      "text": "Something's wrong with the server.",
+      "style": "This line: quiet and a little weary, matter-of-fact, the worst moment of the day."
+    },
+    {
+      "id": "h2",
+      "text": "And the fix is a command you only half remember.",
+      "style": "This line: quiet, dry and a little wry."
+    },
+    {
+      "id": "o1",
+      "text": "There's a calmer way.",
+      "style": "This line: a softer, warmer tone, like a relieved exhale, slightly brighter than before."
+    },
+    {
+      "id": "o2",
+      "text": "Opsmira. Ask in plain words.",
+      "style": "This line: warm and inviting, simple and clear, a short pause after the name."
+    },
+    {
+      "id": "a2",
+      "text": "It looks, with read-only commands that run on their own."
+    },
+    {
+      "id": "a3",
+      "text": "And it shows you what it found. Live."
+    },
+    {
+      "id": "p1",
+      "text": "Then it proposes the fix: what it does, how risky it is, the exact command."
+    },
+    {
+      "id": "p2a",
+      "text": "Nothing changes until you approve.",
+      "style": "Firm and reassuring, with a little weight on the word approve."
+    },
+    {
+      "id": "p2b",
+      "text": "Every action goes in the audit log."
+    },
+    {
+      "id": "c1",
+      "text": "Connect any server with one command."
+    },
+    {
+      "id": "c2a",
+      "text": "The agent dials out."
+    },
+    {
+      "id": "c2b",
+      "text": "No SSH keys. No open ports.",
+      "style": "Two short flat statements with a clear beat between them."
+    },
+    {
+      "id": "w1",
+      "text": "Ask it to keep watch."
+    },
+    {
+      "id": "w2",
+      "text": "Check the disks every morning."
+    },
+    {
+      "id": "w3",
+      "text": "Tell me if the nginx config changes."
+    },
+    {
+      "id": "w4",
+      "text": "Look into it if memory passes ninety percent."
+    },
+    {
+      "id": "w5",
+      "text": "It wakes up on its own, investigates, and leaves you a report."
+    },
+    {
+      "id": "w6",
+      "text": "If a change is needed, it waits for you."
+    },
+    {
+      "id": "b1",
+      "text": "Prefer to type it yourself? Start with an exclamation mark.",
+      "style": "Light and friendly, a small smile in the voice on the second sentence."
+    },
+    {
+      "id": "b2",
+      "text": "It runs your command, and the agent reads the result."
+    },
+    {
+      "id": "s1a",
+      "text": "Opsmira is open source."
+    },
+    {
+      "id": "s1b",
+      "text": "Self-host it in one command."
+    },
+    {
+      "id": "s2a",
+      "text": "Bring any model."
+    },
+    {
+      "id": "s2b",
+      "text": "Your servers, your keys.",
+      "style": "Settled and confident."
+    },
+    {
+      "id": "e1",
+      "text": "Opsmira. Your server, in plain words.",
+      "style": "Slow, warm and settled, quiet confidence, a little space after the name."
+    }
+  ]
+}

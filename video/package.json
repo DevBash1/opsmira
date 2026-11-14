@@ -1,0 +1,47 @@
+{
+  "name": "opsmira-launch-video",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The Opsmira launch film, built with Remotion. Not part of the app build.",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "remotion studio src/index.ts",
+    "voice": "node scripts/voice.mjs",
+    "timeline": "node scripts/build-timeline.mjs",
+    "icons": "node scripts/extract-icons.mjs",
+    "sfx": "python3 scripts/audio/fetch_sounds.py --sfx-only",
+    "music": "python3 scripts/audio/fetch_sounds.py --music-only",
+    "sfx:synth": "python3 scripts/audio/make_sfx.py",
+    "music:synth": "python3 scripts/audio/make_music.py",
+    "audio": "python3 scripts/audio/build_audio.py",
+    "typecheck": "tsc --noEmit",
+    "srt": "node scripts/make-srt.mjs",
+    "render": "node scripts/render.mjs",
+    "render:captions": "node scripts/render.mjs --captions",
+    "poster": "node scripts/render.mjs --poster"
+  },
+  "dependencies": {
+    "@remotion/captions": "4.0.538",
+    "@remotion/cli": "4.0.538",
+    "@remotion/google-fonts": "4.0.538",
+    "@remotion/layout-utils": "4.0.538",
+    "@remotion/media": "4.0.538",
+    "@remotion/media-utils": "4.0.538",
+    "@remotion/motion-blur": "4.0.538",
+    "@remotion/noise": "4.0.538",
+    "@remotion/paths": "4.0.538",
+    "@remotion/shapes": "4.0.538",
+    "@remotion/transitions": "4.0.538",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "remotion": "4.0.538"
+  },
+  "devDependencies": {
+    "@remotion/bundler": "^4.0.538",
+    "@remotion/renderer": "^4.0.538",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "~5.9.3"
+  }
+}

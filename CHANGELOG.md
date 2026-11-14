@@ -6,6 +6,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- The launch film lives in the repository: `video/` is a 97-second Remotion project that recreates the console with
+  invented machines and data, its voice clips cached so it builds and renders offline, and one timeline driving
+  picture and sound. The last two cards (other AI agents through MCP, and Opsmira upgrading itself with the run
+  detached) are picture and music only: the text-to-speech key was rotated before they were added, so no new lines
+  could be recorded. See `video/README.md`.
 - MCP server: other AI agents (Claude Code, Claude Desktop, Cursor...) connect at `/mcp` with a token made under
   Surfaces → Connect an AI agent. They can list servers, read live surfaces, run commands directly on a server, or
   ask Opsmira's own agent and get its reply (long answers through `opsmira_get_reply`). "Ask first" tokens run only

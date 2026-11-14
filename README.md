@@ -158,6 +158,9 @@ npm run dev                        # web on :5173, server on :8787, both reload 
 npm run check                      # typecheck + server tests
 ```
 
+The launch film is a separate Remotion project in [`video/`](video/README.md) (not part of the app build). It is not
+built or rendered by CI; a full render is about 30 minutes on a laptop.
+
 Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
 Contributions are accepted under the project license (AGPL-3.0). Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 

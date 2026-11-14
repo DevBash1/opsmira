@@ -1,0 +1,1571 @@
+{
+  "lines": {
+    "h1": {
+      "id": "h1",
+      "text": "Something's wrong with the server.",
+      "hash": "3c8d514013c3b651",
+      "file": "voice/h1.mp3",
+      "duration": 1.872,
+      "words": [
+        {
+          "word": "Something's",
+          "start": 0,
+          "end": 0.66
+        },
+        {
+          "word": "wrong",
+          "start": 0.66,
+          "end": 1
+        },
+        {
+          "word": "with",
+          "start": 1,
+          "end": 1.2
+        },
+        {
+          "word": "the",
+          "start": 1.2,
+          "end": 1.4
+        },
+        {
+          "word": "server.",
+          "start": 1.4,
+          "end": 1.62
+        }
+      ],
+      "asr": "Something's wrong with the server.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.1,
+        "lead": 0.85,
+        "trail": 0.55
+      },
+      "metrics": {
+        "duration": 1.84,
+        "lead_silence": 0.01,
+        "trail_silence": 0.105,
+        "active_rms_db": -21.35,
+        "peak_db": -5.87,
+        "voiced_fraction": 0.908,
+        "tail80_db": -67.7,
+        "f0_median_hz": 129.03,
+        "f0_spread_semitones": 3.37,
+        "f0_range_semitones": 13.07
+      }
+    },
+    "h2": {
+      "id": "h2",
+      "text": "And the fix is a command you only half remember.",
+      "hash": "6223fa44143051f1",
+      "file": "voice/h2.mp3",
+      "duration": 3.192,
+      "words": [
+        {
+          "word": "And",
+          "start": 0,
+          "end": 0.12
+        },
+        {
+          "word": "the",
+          "start": 0.12,
+          "end": 0.34
+        },
+        {
+          "word": "fix",
+          "start": 0.34,
+          "end": 0.62
+        },
+        {
+          "word": "is",
+          "start": 0.62,
+          "end": 1.14
+        },
+        {
+          "word": "a",
+          "start": 1.14,
+          "end": 1.34
+        },
+        {
+          "word": "command",
+          "start": 1.34,
+          "end": 1.64
+        },
+        {
+          "word": "you",
+          "start": 1.64,
+          "end": 1.84
+        },
+        {
+          "word": "only",
+          "start": 1.84,
+          "end": 2.1
+        },
+        {
+          "word": "half",
+          "start": 2.1,
+          "end": 2.5
+        },
+        {
+          "word": "remember.",
+          "start": 2.5,
+          "end": 2.78
+        }
+      ],
+      "asr": "and the fix is a command you only half remember.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.15,
+        "lead": 0,
+        "trail": 0.08
+      },
+      "metrics": {
+        "duration": 3.15,
+        "lead_silence": 0,
+        "trail_silence": 0.115,
+        "active_rms_db": -23.91,
+        "peak_db": -5.74,
+        "voiced_fraction": 0.839,
+        "tail80_db": -57.8,
+        "f0_median_hz": 132.23,
+        "f0_spread_semitones": 2.65,
+        "f0_range_semitones": 11.94
+      }
+    },
+    "o1": {
+      "id": "o1",
+      "text": "There's a calmer way.",
+      "hash": "e070988ceeca3e0b",
+      "file": "voice/o1.mp3",
+      "duration": 1.704,
+      "words": [
+        {
+          "word": "There's",
+          "start": 0,
+          "end": 0.42
+        },
+        {
+          "word": "a",
+          "start": 0.42,
+          "end": 0.76
+        },
+        {
+          "word": "calmer",
+          "start": 0.76,
+          "end": 1.2
+        },
+        {
+          "word": "way.",
+          "start": 1.2,
+          "end": 1.46
+        }
+      ],
+      "asr": "There's a calmer way.",
+      "wer": 0,
+      "raw": {
+        "duration": 2.6,
+        "lead": 0.02,
+        "trail": 1.06
+      },
+      "metrics": {
+        "duration": 1.66,
+        "lead_silence": 0.01,
+        "trail_silence": 0.105,
+        "active_rms_db": -20.65,
+        "peak_db": -3.55,
+        "voiced_fraction": 0.856,
+        "tail80_db": -67.7,
+        "f0_median_hz": 142.01,
+        "f0_spread_semitones": 2.54,
+        "f0_range_semitones": 9.43
+      }
+    },
+    "o2": {
+      "id": "o2",
+      "text": "Opsmira. Ask in plain words.",
+      "hash": "0755d7a7ce6ed60e",
+      "file": "voice/o2.mp3",
+      "duration": 2.304,
+      "words": [
+        {
+          "word": "Opsmira.",
+          "start": 0,
+          "end": 0.62
+        },
+        {
+          "word": "Ask",
+          "start": 1.12,
+          "end": 1.38
+        },
+        {
+          "word": "in",
+          "start": 1.38,
+          "end": 1.58
+        },
+        {
+          "word": "plain",
+          "start": 1.58,
+          "end": 1.78
+        },
+        {
+          "word": "words.",
+          "start": 1.78,
+          "end": 2.06
+        }
+      ],
+      "asr": "Opsmira. Ask in plain words.",
+      "wer": 0,
+      "raw": {
+        "duration": 2.4,
+        "lead": 0.06,
+        "trail": 0.22
+      },
+      "metrics": {
+        "duration": 2.26,
+        "lead_silence": 0.01,
+        "trail_silence": 0.105,
+        "active_rms_db": -21.75,
+        "peak_db": -3.43,
+        "voiced_fraction": 0.736,
+        "tail80_db": -64.1,
+        "f0_median_hz": 143.72,
+        "f0_spread_semitones": 3.68,
+        "f0_range_semitones": 11.54
+      }
+    },
+    "a2": {
+      "id": "a2",
+      "text": "It looks, with read-only commands that run on their own.",
+      "hash": "3f4b1f2c145050ed",
+      "file": "voice/a2.mp3",
+      "duration": 3.36,
+      "words": [
+        {
+          "word": "It",
+          "start": 0,
+          "end": 0.2
+        },
+        {
+          "word": "looks,",
+          "start": 0.2,
+          "end": 0.56
+        },
+        {
+          "word": "with",
+          "start": 0.56,
+          "end": 1.12
+        },
+        {
+          "word": "read-only",
+          "start": 1.46,
+          "end": 1.7
+        },
+        {
+          "word": "commands",
+          "start": 1.7,
+          "end": 2.1
+        },
+        {
+          "word": "that",
+          "start": 2.1,
+          "end": 2.36
+        },
+        {
+          "word": "run",
+          "start": 2.36,
+          "end": 2.6
+        },
+        {
+          "word": "on",
+          "start": 2.6,
+          "end": 2.76
+        },
+        {
+          "word": "their",
+          "start": 2.76,
+          "end": 2.9
+        },
+        {
+          "word": "own.",
+          "start": 2.9,
+          "end": 3.14
+        }
+      ],
+      "asr": "It looks with read-only commands that run on their own.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.45,
+        "lead": 0,
+        "trail": 0.25
+      },
+      "metrics": {
+        "duration": 3.32,
+        "lead_silence": 0,
+        "trail_silence": 0.105,
+        "active_rms_db": -22.54,
+        "peak_db": -7.96,
+        "voiced_fraction": 0.877,
+        "tail80_db": -61.8,
+        "f0_median_hz": 132.6,
+        "f0_spread_semitones": 3.29,
+        "f0_range_semitones": 12.26
+      }
+    },
+    "a3": {
+      "id": "a3",
+      "text": "And it shows you what it found. Live.",
+      "hash": "cb25f663599bea03",
+      "file": "voice/a3.mp3",
+      "duration": 2.928,
+      "words": [
+        {
+          "word": "And",
+          "start": 0,
+          "end": 0.36
+        },
+        {
+          "word": "it",
+          "start": 0.36,
+          "end": 0.58
+        },
+        {
+          "word": "shows",
+          "start": 0.58,
+          "end": 0.82
+        },
+        {
+          "word": "you",
+          "start": 0.82,
+          "end": 1.1
+        },
+        {
+          "word": "what",
+          "start": 1.1,
+          "end": 1.32
+        },
+        {
+          "word": "it",
+          "start": 1.32,
+          "end": 1.6
+        },
+        {
+          "word": "found.",
+          "start": 1.6,
+          "end": 1.8
+        },
+        {
+          "word": "Live.",
+          "start": 2.7,
+          "end": 2.72
+        }
+      ],
+      "asr": "and it shows you what it found, live.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.2,
+        "lead": 0.12,
+        "trail": 0.33
+      },
+      "metrics": {
+        "duration": 2.89,
+        "lead_silence": 0.01,
+        "trail_silence": 0.115,
+        "active_rms_db": -23.94,
+        "peak_db": -6.12,
+        "voiced_fraction": 0.79,
+        "tail80_db": -63.4,
+        "f0_median_hz": 133.33,
+        "f0_spread_semitones": 3.95,
+        "f0_range_semitones": 13.75
+      }
+    },
+    "p1": {
+      "id": "p1",
+      "text": "Then it proposes the fix: what it does, how risky it is, the exact command.",
+      "hash": "270d1b458ff6fafb",
+      "file": "voice/p1.mp3",
+      "duration": 5.304,
+      "words": [
+        {
+          "word": "Then",
+          "start": 0,
+          "end": 0.38
+        },
+        {
+          "word": "it",
+          "start": 0.38,
+          "end": 0.78
+        },
+        {
+          "word": "proposes",
+          "start": 0.78,
+          "end": 1.24
+        },
+        {
+          "word": "the",
+          "start": 1.24,
+          "end": 1.5
+        },
+        {
+          "word": "fix:",
+          "start": 1.5,
+          "end": 1.76
+        },
+        {
+          "word": "what",
+          "start": 2.26,
+          "end": 2.36
+        },
+        {
+          "word": "it",
+          "start": 2.36,
+          "end": 2.48
+        },
+        {
+          "word": "does,",
+          "start": 2.48,
+          "end": 2.76
+        },
+        {
+          "word": "how",
+          "start": 3.18,
+          "end": 3.28
+        },
+        {
+          "word": "risky",
+          "start": 3.28,
+          "end": 3.5
+        },
+        {
+          "word": "it",
+          "start": 3.5,
+          "end": 3.68
+        },
+        {
+          "word": "is,",
+          "start": 3.68,
+          "end": 3.92
+        },
+        {
+          "word": "the",
+          "start": 4.24,
+          "end": 4.42
+        },
+        {
+          "word": "exact",
+          "start": 4.42,
+          "end": 4.7
+        },
+        {
+          "word": "command.",
+          "start": 4.7,
+          "end": 5.06
+        }
+      ],
+      "asr": "Then it proposes the fix, what it does, how risky it is, the exact command.",
+      "wer": 0,
+      "raw": {
+        "duration": 5.3,
+        "lead": 0.03,
+        "trail": 0.15
+      },
+      "metrics": {
+        "duration": 5.26,
+        "lead_silence": 0,
+        "trail_silence": 0.135,
+        "active_rms_db": -20.91,
+        "peak_db": -1.1,
+        "voiced_fraction": 0.715,
+        "tail80_db": -61.3,
+        "f0_median_hz": 149.07,
+        "f0_spread_semitones": 3.15,
+        "f0_range_semitones": 13.84
+      }
+    },
+    "p2a": {
+      "id": "p2a",
+      "text": "Nothing changes until you approve.",
+      "hash": "25e37c5bb4c9efb2",
+      "file": "voice/p2a.mp3",
+      "duration": 2.904,
+      "words": [
+        {
+          "word": "Nothing",
+          "start": 0,
+          "end": 0.52
+        },
+        {
+          "word": "changes",
+          "start": 0.52,
+          "end": 1.24
+        },
+        {
+          "word": "until",
+          "start": 1.24,
+          "end": 1.84
+        },
+        {
+          "word": "you",
+          "start": 1.84,
+          "end": 2.2
+        },
+        {
+          "word": "approve.",
+          "start": 2.2,
+          "end": 2.66
+        }
+      ],
+      "asr": "Nothing changes until you approve.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.35,
+        "lead": 0.28,
+        "trail": 0.34
+      },
+      "metrics": {
+        "duration": 2.87,
+        "lead_silence": 0.01,
+        "trail_silence": 0.105,
+        "active_rms_db": -24.43,
+        "peak_db": -6.97,
+        "voiced_fraction": 0.868,
+        "tail80_db": -63.4,
+        "f0_median_hz": 122.45,
+        "f0_spread_semitones": 3.62,
+        "f0_range_semitones": 12.96
+      }
+    },
+    "p2b": {
+      "id": "p2b",
+      "text": "Every action goes in the audit log.",
+      "hash": "4a69c0df2d8d0d8e",
+      "file": "voice/p2b.mp3",
+      "duration": 2.4,
+      "words": [
+        {
+          "word": "Every",
+          "start": 0,
+          "end": 0.38
+        },
+        {
+          "word": "action",
+          "start": 0.38,
+          "end": 0.82
+        },
+        {
+          "word": "goes",
+          "start": 0.82,
+          "end": 1.52
+        },
+        {
+          "word": "in",
+          "start": 1.52,
+          "end": 1.62
+        },
+        {
+          "word": "the",
+          "start": 1.62,
+          "end": 1.8
+        },
+        {
+          "word": "audit",
+          "start": 1.8,
+          "end": 1.9
+        },
+        {
+          "word": "log.",
+          "start": 1.9,
+          "end": 2.2
+        }
+      ],
+      "asr": "Every action goes in the audit log.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.2,
+        "lead": 0.11,
+        "trail": 0.86
+      },
+      "metrics": {
+        "duration": 2.37,
+        "lead_silence": 0.01,
+        "trail_silence": 0.115,
+        "active_rms_db": -22.8,
+        "peak_db": -5.9,
+        "voiced_fraction": 0.811,
+        "tail80_db": -67.7,
+        "f0_median_hz": 140.35,
+        "f0_spread_semitones": 2.19,
+        "f0_range_semitones": 9.52
+      }
+    },
+    "c1": {
+      "id": "c1",
+      "text": "Connect any server with one command.",
+      "hash": "0ce1ac4a8aec90f4",
+      "file": "voice/c1.mp3",
+      "duration": 2.688,
+      "words": [
+        {
+          "word": "Connect",
+          "start": 0,
+          "end": 0.48
+        },
+        {
+          "word": "any",
+          "start": 0.48,
+          "end": 0.96
+        },
+        {
+          "word": "server",
+          "start": 0.96,
+          "end": 1.26
+        },
+        {
+          "word": "with",
+          "start": 1.26,
+          "end": 1.76
+        },
+        {
+          "word": "one",
+          "start": 1.76,
+          "end": 2.12
+        },
+        {
+          "word": "command.",
+          "start": 2.12,
+          "end": 2.46
+        }
+      ],
+      "asr": "Connect any server with one command.",
+      "wer": 0,
+      "raw": {
+        "duration": 2.8,
+        "lead": 0,
+        "trail": 0.27
+      },
+      "metrics": {
+        "duration": 2.65,
+        "lead_silence": 0,
+        "trail_silence": 0.115,
+        "active_rms_db": -21.8,
+        "peak_db": -5.37,
+        "voiced_fraction": 0.823,
+        "tail80_db": -70.6,
+        "f0_median_hz": 132.97,
+        "f0_spread_semitones": 2.18,
+        "f0_range_semitones": 10.29
+      }
+    },
+    "c2a": {
+      "id": "c2a",
+      "text": "The agent dials out.",
+      "hash": "69982864ea190474",
+      "file": "voice/c2a.mp3",
+      "duration": 1.536,
+      "words": [
+        {
+          "word": "The",
+          "start": 0,
+          "end": 0.22
+        },
+        {
+          "word": "agent",
+          "start": 0.22,
+          "end": 0.58
+        },
+        {
+          "word": "dials",
+          "start": 0.58,
+          "end": 1.12
+        },
+        {
+          "word": "out.",
+          "start": 1.12,
+          "end": 1.32
+        }
+      ],
+      "asr": "The agent dials out.",
+      "wer": 0,
+      "raw": {
+        "duration": 2.3,
+        "lead": 0.3,
+        "trail": 0.65
+      },
+      "metrics": {
+        "duration": 1.49,
+        "lead_silence": 0,
+        "trail_silence": 0.105,
+        "active_rms_db": -20.43,
+        "peak_db": -5.36,
+        "voiced_fraction": 0.807,
+        "tail80_db": -67.4,
+        "f0_median_hz": 143.71,
+        "f0_spread_semitones": 2.85,
+        "f0_range_semitones": 13.96
+      }
+    },
+    "c2b": {
+      "id": "c2b",
+      "text": "No SSH keys. No open ports.",
+      "hash": "a80b446cab456321",
+      "file": "voice/c2b.mp3",
+      "duration": 3.264,
+      "words": [
+        {
+          "word": "No",
+          "start": 0,
+          "end": 0.44
+        },
+        {
+          "word": "SSH",
+          "start": 0.44,
+          "end": 1.08
+        },
+        {
+          "word": "keys.",
+          "start": 1.08,
+          "end": 1.42
+        },
+        {
+          "word": "No",
+          "start": 2.18,
+          "end": 2.36
+        },
+        {
+          "word": "open",
+          "start": 2.36,
+          "end": 2.66
+        },
+        {
+          "word": "ports.",
+          "start": 2.66,
+          "end": 3
+        }
+      ],
+      "asr": "no SSH keys, no open ports",
+      "wer": 0,
+      "raw": {
+        "duration": 3.4,
+        "lead": 0.01,
+        "trail": 0.29
+      },
+      "metrics": {
+        "duration": 3.23,
+        "lead_silence": 0,
+        "trail_silence": 0.115,
+        "active_rms_db": -20.34,
+        "peak_db": -2.96,
+        "voiced_fraction": 0.778,
+        "tail80_db": -58,
+        "f0_median_hz": 131.87,
+        "f0_spread_semitones": 2.22,
+        "f0_range_semitones": 8.46
+      }
+    },
+    "w1": {
+      "id": "w1",
+      "text": "Ask it to keep watch.",
+      "hash": "94bf8bec3c802548",
+      "file": "voice/w1.mp3",
+      "duration": 1.872,
+      "words": [
+        {
+          "word": "Ask",
+          "start": 0,
+          "end": 0.36
+        },
+        {
+          "word": "it",
+          "start": 0.36,
+          "end": 0.7
+        },
+        {
+          "word": "to",
+          "start": 0.7,
+          "end": 1.04
+        },
+        {
+          "word": "keep",
+          "start": 1.04,
+          "end": 1.24
+        },
+        {
+          "word": "watch.",
+          "start": 1.24,
+          "end": 1.64
+        }
+      ],
+      "asr": "Ask it to keep watch.",
+      "wer": 0,
+      "raw": {
+        "duration": 2.2,
+        "lead": 0.27,
+        "trail": 0.23
+      },
+      "metrics": {
+        "duration": 1.84,
+        "lead_silence": 0,
+        "trail_silence": 0.115,
+        "active_rms_db": -25.88,
+        "peak_db": -5.57,
+        "voiced_fraction": 0.697,
+        "tail80_db": -66.8,
+        "f0_median_hz": 134.08,
+        "f0_spread_semitones": 3.14,
+        "f0_range_semitones": 9.95
+      }
+    },
+    "w2": {
+      "id": "w2",
+      "text": "Check the disks every morning.",
+      "hash": "d9f3d49600309798",
+      "file": "voice/w2.mp3",
+      "duration": 2.016,
+      "words": [
+        {
+          "word": "Check",
+          "start": 0,
+          "end": 0.32
+        },
+        {
+          "word": "the",
+          "start": 0.32,
+          "end": 0.52
+        },
+        {
+          "word": "disks",
+          "start": 0.52,
+          "end": 0.86
+        },
+        {
+          "word": "every",
+          "start": 0.86,
+          "end": 1.5
+        },
+        {
+          "word": "morning.",
+          "start": 1.5,
+          "end": 1.8
+        }
+      ],
+      "asr": "Check the disks every morning.",
+      "wer": 0,
+      "raw": {
+        "duration": 2.1,
+        "lead": 0.12,
+        "trail": 0.13
+      },
+      "metrics": {
+        "duration": 1.99,
+        "lead_silence": 0.01,
+        "trail_silence": 0.115,
+        "active_rms_db": -23.35,
+        "peak_db": -7.62,
+        "voiced_fraction": 0.77,
+        "tail80_db": -74.7,
+        "f0_median_hz": 135.59,
+        "f0_spread_semitones": 2.45,
+        "f0_range_semitones": 8.62
+      }
+    },
+    "w3": {
+      "id": "w3",
+      "text": "Tell me if the nginx config changes.",
+      "hash": "95df1525fb3a16aa",
+      "file": "voice/w3.mp3",
+      "duration": 2.664,
+      "words": [
+        {
+          "word": "Tell",
+          "start": 0,
+          "end": 0.26
+        },
+        {
+          "word": "me",
+          "start": 0.26,
+          "end": 0.56
+        },
+        {
+          "word": "if",
+          "start": 0.56,
+          "end": 0.78
+        },
+        {
+          "word": "the",
+          "start": 0.78,
+          "end": 1.04
+        },
+        {
+          "word": "nginx",
+          "start": 1.04,
+          "end": 1.42
+        },
+        {
+          "word": "config",
+          "start": 1.42,
+          "end": 1.86
+        },
+        {
+          "word": "changes.",
+          "start": 1.86,
+          "end": 2.38
+        }
+      ],
+      "asr": "Tell me if the nginx config changes.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.2,
+        "lead": 0.08,
+        "trail": 0.63
+      },
+      "metrics": {
+        "duration": 2.63,
+        "lead_silence": 0.01,
+        "trail_silence": 0.105,
+        "active_rms_db": -22.64,
+        "peak_db": -5.42,
+        "voiced_fraction": 0.898,
+        "tail80_db": -71.1,
+        "f0_median_hz": 142.86,
+        "f0_spread_semitones": 3.06,
+        "f0_range_semitones": 11.4
+      }
+    },
+    "w4": {
+      "id": "w4",
+      "text": "Look into it if memory passes ninety percent.",
+      "hash": "4e684c65a0d88ccf",
+      "file": "voice/w4.mp3",
+      "duration": 3.576,
+      "words": [
+        {
+          "word": "Look",
+          "start": 0,
+          "end": 0.4
+        },
+        {
+          "word": "into",
+          "start": 0.4,
+          "end": 0.88
+        },
+        {
+          "word": "it",
+          "start": 0.88,
+          "end": 1.16
+        },
+        {
+          "word": "if",
+          "start": 1.22,
+          "end": 1.66
+        },
+        {
+          "word": "memory",
+          "start": 1.66,
+          "end": 2.06
+        },
+        {
+          "word": "passes",
+          "start": 2.06,
+          "end": 2.6
+        },
+        {
+          "word": "ninety",
+          "start": 2.6,
+          "end": 3
+        },
+        {
+          "word": "percent.",
+          "start": 3,
+          "end": 3.38
+        }
+      ],
+      "asr": "Look into it, if memory passes 90%",
+      "wer": 0.25,
+      "raw": {
+        "duration": 3.8,
+        "lead": 0.04,
+        "trail": 0.37
+      },
+      "metrics": {
+        "duration": 3.53,
+        "lead_silence": 0.01,
+        "trail_silence": 0.105,
+        "active_rms_db": -22.72,
+        "peak_db": -5.57,
+        "voiced_fraction": 0.774,
+        "tail80_db": -67.2,
+        "f0_median_hz": 125,
+        "f0_spread_semitones": 2.18,
+        "f0_range_semitones": 9.85
+      }
+    },
+    "w5": {
+      "id": "w5",
+      "text": "It wakes up on its own, investigates, and leaves you a report.",
+      "hash": "ef030ec4c8d57658",
+      "file": "voice/w5.mp3",
+      "duration": 4.128,
+      "words": [
+        {
+          "word": "It",
+          "start": 0,
+          "end": 0.26
+        },
+        {
+          "word": "wakes",
+          "start": 0.26,
+          "end": 0.44
+        },
+        {
+          "word": "up",
+          "start": 0.44,
+          "end": 0.78
+        },
+        {
+          "word": "on",
+          "start": 0.78,
+          "end": 0.94
+        },
+        {
+          "word": "its",
+          "start": 0.94,
+          "end": 1.12
+        },
+        {
+          "word": "own,",
+          "start": 1.12,
+          "end": 1.38
+        },
+        {
+          "word": "investigates,",
+          "start": 2.06,
+          "end": 2.34
+        },
+        {
+          "word": "and",
+          "start": 2.8,
+          "end": 3.04
+        },
+        {
+          "word": "leaves",
+          "start": 3.04,
+          "end": 3.24
+        },
+        {
+          "word": "you",
+          "start": 3.24,
+          "end": 3.42
+        },
+        {
+          "word": "a",
+          "start": 3.42,
+          "end": 3.66
+        },
+        {
+          "word": "report.",
+          "start": 3.66,
+          "end": 3.86
+        }
+      ],
+      "asr": "It wakes up on its own, investigates, and leaves you a report.",
+      "wer": 0,
+      "raw": {
+        "duration": 4.8,
+        "lead": 0.51,
+        "trail": 0.34
+      },
+      "metrics": {
+        "duration": 4.09,
+        "lead_silence": 0,
+        "trail_silence": 0.115,
+        "active_rms_db": -21.3,
+        "peak_db": -4.99,
+        "voiced_fraction": 0.798,
+        "tail80_db": -61.1,
+        "f0_median_hz": 138.73,
+        "f0_spread_semitones": 2.17,
+        "f0_range_semitones": 8.39
+      }
+    },
+    "w6": {
+      "id": "w6",
+      "text": "If a change is needed, it waits for you.",
+      "hash": "0efda06352481dbf",
+      "file": "voice/w6.mp3",
+      "duration": 2.784,
+      "words": [
+        {
+          "word": "If",
+          "start": 0,
+          "end": 0.24
+        },
+        {
+          "word": "a",
+          "start": 0.24,
+          "end": 0.46
+        },
+        {
+          "word": "change",
+          "start": 0.46,
+          "end": 0.82
+        },
+        {
+          "word": "is",
+          "start": 0.82,
+          "end": 1.12
+        },
+        {
+          "word": "needed,",
+          "start": 1.12,
+          "end": 1.4
+        },
+        {
+          "word": "it",
+          "start": 1.92,
+          "end": 2.06
+        },
+        {
+          "word": "waits",
+          "start": 2.06,
+          "end": 2.26
+        },
+        {
+          "word": "for",
+          "start": 2.26,
+          "end": 2.5
+        },
+        {
+          "word": "you.",
+          "start": 2.5,
+          "end": 2.62
+        }
+      ],
+      "asr": "If a change is needed, it waits for you.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.2,
+        "lead": 0.01,
+        "trail": 0.56
+      },
+      "metrics": {
+        "duration": 2.76,
+        "lead_silence": 0,
+        "trail_silence": 0.105,
+        "active_rms_db": -23.06,
+        "peak_db": -6.95,
+        "voiced_fraction": 0.812,
+        "tail80_db": -63.1,
+        "f0_median_hz": 135.59,
+        "f0_spread_semitones": 3.32,
+        "f0_range_semitones": 11.32
+      }
+    },
+    "b1": {
+      "id": "b1",
+      "text": "Prefer to type it yourself? Start with an exclamation mark.",
+      "hash": "d690b7eed23ae180",
+      "file": "voice/b1.mp3",
+      "duration": 3.336,
+      "words": [
+        {
+          "word": "Prefer",
+          "start": 0,
+          "end": 0.28
+        },
+        {
+          "word": "to",
+          "start": 0.28,
+          "end": 0.54
+        },
+        {
+          "word": "type",
+          "start": 0.54,
+          "end": 0.76
+        },
+        {
+          "word": "it",
+          "start": 0.76,
+          "end": 0.88
+        },
+        {
+          "word": "yourself?",
+          "start": 0.88,
+          "end": 1.28
+        },
+        {
+          "word": "Start",
+          "start": 2.04,
+          "end": 2.04
+        },
+        {
+          "word": "with",
+          "start": 2.04,
+          "end": 2.24
+        },
+        {
+          "word": "an",
+          "start": 2.24,
+          "end": 2.46
+        },
+        {
+          "word": "exclamation",
+          "start": 2.46,
+          "end": 2.84
+        },
+        {
+          "word": "mark.",
+          "start": 2.84,
+          "end": 3.14
+        }
+      ],
+      "asr": "Prefer to type it yourself? Start with an exclamation mark.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.65,
+        "lead": 0.18,
+        "trail": 0.32
+      },
+      "metrics": {
+        "duration": 3.29,
+        "lead_silence": 0.01,
+        "trail_silence": 0.115,
+        "active_rms_db": -24.36,
+        "peak_db": -7.29,
+        "voiced_fraction": 0.8,
+        "tail80_db": -65.4,
+        "f0_median_hz": 130.79,
+        "f0_spread_semitones": 2.33,
+        "f0_range_semitones": 10.45
+      }
+    },
+    "b2": {
+      "id": "b2",
+      "text": "It runs your command, and the agent reads the result.",
+      "hash": "577e662a33852b40",
+      "file": "voice/b2.mp3",
+      "duration": 3.384,
+      "words": [
+        {
+          "word": "It",
+          "start": 0,
+          "end": 0.3
+        },
+        {
+          "word": "runs",
+          "start": 0.3,
+          "end": 0.6
+        },
+        {
+          "word": "your",
+          "start": 0.6,
+          "end": 0.84
+        },
+        {
+          "word": "command,",
+          "start": 0.84,
+          "end": 1.24
+        },
+        {
+          "word": "and",
+          "start": 1.74,
+          "end": 1.82
+        },
+        {
+          "word": "the",
+          "start": 1.82,
+          "end": 2.1
+        },
+        {
+          "word": "agent",
+          "start": 2.1,
+          "end": 2.3
+        },
+        {
+          "word": "reads",
+          "start": 2.3,
+          "end": 2.64
+        },
+        {
+          "word": "the",
+          "start": 2.64,
+          "end": 2.88
+        },
+        {
+          "word": "result.",
+          "start": 2.88,
+          "end": 3.1
+        }
+      ],
+      "asr": "It runs your command, and the agent reads the result.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.45,
+        "lead": 0.05,
+        "trail": 0.19
+      },
+      "metrics": {
+        "duration": 3.35,
+        "lead_silence": 0.01,
+        "trail_silence": 0.105,
+        "active_rms_db": -23.42,
+        "peak_db": -6.7,
+        "voiced_fraction": 0.824,
+        "tail80_db": -64.1,
+        "f0_median_hz": 126.65,
+        "f0_spread_semitones": 2.09,
+        "f0_range_semitones": 9.72
+      }
+    },
+    "s1a": {
+      "id": "s1a",
+      "text": "Opsmira is open source.",
+      "hash": "db61b77a24d8d3a7",
+      "file": "voice/s1a.mp3",
+      "duration": 2.352,
+      "words": [
+        {
+          "word": "Opsmira",
+          "start": 0,
+          "end": 0.7
+        },
+        {
+          "word": "is",
+          "start": 0.7,
+          "end": 1.32
+        },
+        {
+          "word": "open",
+          "start": 1.32,
+          "end": 1.7
+        },
+        {
+          "word": "source.",
+          "start": 1.7,
+          "end": 2.08
+        }
+      ],
+      "asr": "Opsmira is open source",
+      "wer": 0,
+      "raw": {
+        "duration": 3.05,
+        "lead": 0.01,
+        "trail": 0.86
+      },
+      "metrics": {
+        "duration": 2.31,
+        "lead_silence": 0,
+        "trail_silence": 0.105,
+        "active_rms_db": -20.33,
+        "peak_db": -3.36,
+        "voiced_fraction": 0.784,
+        "tail80_db": -59.7,
+        "f0_median_hz": 147.24,
+        "f0_spread_semitones": 3.55,
+        "f0_range_semitones": 13.68
+      }
+    },
+    "s1b": {
+      "id": "s1b",
+      "text": "Self-host it in one command.",
+      "hash": "ce2f165b00424ef8",
+      "file": "voice/s1b.mp3",
+      "duration": 2.52,
+      "words": [
+        {
+          "word": "Self-host",
+          "start": 0.5,
+          "end": 0.78
+        },
+        {
+          "word": "it",
+          "start": 0.78,
+          "end": 1.06
+        },
+        {
+          "word": "in",
+          "start": 1.06,
+          "end": 1.62
+        },
+        {
+          "word": "one",
+          "start": 1.62,
+          "end": 1.92
+        },
+        {
+          "word": "command.",
+          "start": 1.92,
+          "end": 2.28
+        }
+      ],
+      "asr": "self-host it in one command.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.3,
+        "lead": 0.01,
+        "trail": 0.94
+      },
+      "metrics": {
+        "duration": 2.48,
+        "lead_silence": 0,
+        "trail_silence": 0.115,
+        "active_rms_db": -21.78,
+        "peak_db": -4.92,
+        "voiced_fraction": 0.795,
+        "tail80_db": -64.2,
+        "f0_median_hz": 129.73,
+        "f0_spread_semitones": 2.65,
+        "f0_range_semitones": 10.3
+      }
+    },
+    "s2a": {
+      "id": "s2a",
+      "text": "Bring any model.",
+      "hash": "b87f6d882e32602f",
+      "file": "voice/s2a.mp3",
+      "duration": 1.224,
+      "words": [
+        {
+          "word": "Bring",
+          "start": 0,
+          "end": 0.38
+        },
+        {
+          "word": "any",
+          "start": 0.38,
+          "end": 0.76
+        },
+        {
+          "word": "model.",
+          "start": 0.76,
+          "end": 0.94
+        }
+      ],
+      "asr": "Bring any model",
+      "wer": 0,
+      "raw": {
+        "duration": 1.55,
+        "lead": 0.02,
+        "trail": 0.49
+      },
+      "metrics": {
+        "duration": 1.18,
+        "lead_silence": 0,
+        "trail_silence": 0.105,
+        "active_rms_db": -22.11,
+        "peak_db": -7.2,
+        "voiced_fraction": 0.857,
+        "tail80_db": -62.8,
+        "f0_median_hz": 139.13,
+        "f0_spread_semitones": 3.58,
+        "f0_range_semitones": 11.81
+      }
+    },
+    "s2b": {
+      "id": "s2b",
+      "text": "Your servers, your keys.",
+      "hash": "bec13cc014c6a206",
+      "file": "voice/s2b.mp3",
+      "duration": 2.016,
+      "words": [
+        {
+          "word": "Your",
+          "start": 0,
+          "end": 0.36
+        },
+        {
+          "word": "servers,",
+          "start": 0.36,
+          "end": 0.8
+        },
+        {
+          "word": "your",
+          "start": 1.26,
+          "end": 1.48
+        },
+        {
+          "word": "keys.",
+          "start": 1.48,
+          "end": 1.76
+        }
+      ],
+      "asr": "your servers, your keys.",
+      "wer": 0,
+      "raw": {
+        "duration": 2.05,
+        "lead": 0,
+        "trail": 0.19
+      },
+      "metrics": {
+        "duration": 1.98,
+        "lead_silence": 0,
+        "trail_silence": 0.115,
+        "active_rms_db": -21.46,
+        "peak_db": -6.68,
+        "voiced_fraction": 0.774,
+        "tail80_db": -63.4,
+        "f0_median_hz": 142.86,
+        "f0_spread_semitones": 3.58,
+        "f0_range_semitones": 12.46
+      }
+    },
+    "e1": {
+      "id": "e1",
+      "text": "Opsmira. Your server, in plain words.",
+      "hash": "7bb4ced593912a83",
+      "file": "voice/e1.mp3",
+      "duration": 3.336,
+      "words": [
+        {
+          "word": "Opsmira.",
+          "start": 0,
+          "end": 0.68
+        },
+        {
+          "word": "Your",
+          "start": 1.4,
+          "end": 1.56
+        },
+        {
+          "word": "server,",
+          "start": 1.56,
+          "end": 1.9
+        },
+        {
+          "word": "in",
+          "start": 1.9,
+          "end": 2.46
+        },
+        {
+          "word": "plain",
+          "start": 2.46,
+          "end": 2.76
+        },
+        {
+          "word": "words.",
+          "start": 2.76,
+          "end": 3.1
+        }
+      ],
+      "asr": "Opsmira, your server in plain words.",
+      "wer": 0,
+      "raw": {
+        "duration": 3.4,
+        "lead": 0,
+        "trail": 0.22
+      },
+      "metrics": {
+        "duration": 3.3,
+        "lead_silence": 0,
+        "trail_silence": 0.115,
+        "active_rms_db": -22.25,
+        "peak_db": -5.86,
+        "voiced_fraction": 0.734,
+        "tail80_db": -69.4,
+        "f0_median_hz": 123.71,
+        "f0_spread_semitones": 2.51,
+        "f0_range_semitones": 9.52
+      }
+    }
+  },
+  "model": "gpt-4o-mini-tts",
+  "voice": "cedar"
+}
